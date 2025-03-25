@@ -7,53 +7,59 @@
         /* Styles généraux et mise en page */
         body {
             font-family: "Times New Roman", Times, serif;
-            font-size: 12pt;
+            font-size: 11pt;
             margin: 0;
-            padding: 10px;
+            padding: 5px; /* Marges réduites */
             color: #333;
         }
         
         /* En-tête de l'établissement */
         .institution-header {
             text-align: center;
-            margin-bottom: 15px;
-            line-height: 1.2;
+            margin-bottom: 10px; /* Marge inférieure réduite */
+            line-height: 1.1; /* Interligne réduit */
         }
         
         .ministry {
-            font-size: 10pt;
+            font-size: 9pt;
             text-transform: uppercase;
             margin-bottom: 2px;
         }
         
         .academic-info {
-            font-size: 10pt;
-            margin-bottom: 5px;
+            font-size: 9pt;
+            margin-bottom: 3px;
         }
         
         .school-name {
-            font-size: 16pt;
+            font-size: 12pt; /* Taille définie à Times New Roman 12 */
             font-weight: bold;
-            margin: 5px 0;
+            margin: 3px 0;
         }
         
         .school-address {
-            font-size: 10pt;
+            font-size: 9pt;
             margin-bottom: 2px;
         }
         
         .school-year {
-            font-size: 12pt;
+            font-size: 10pt;
             font-weight: bold;
-            margin: 5px 0;
+            margin: 3px 0;
+        }
+        
+        .class-info {
+            font-size: 11pt;
+            font-weight: bold;
+            margin: 3px 0;
         }
         
         /* Titre du document */
         .document-title {
             text-align: center;
-            font-size: 14pt;
+            font-size: 12pt;
             font-weight: bold;
-            margin: 15px 0;
+            margin: 10px 0; /* Marges réduites */
             text-decoration: underline;
         }
         
@@ -61,7 +67,7 @@
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 10px;
+            margin-top: 7px; /* Marge supérieure réduite */
             table-layout: fixed;
         }
         
@@ -69,18 +75,19 @@
             background-color: #f2f2f2;
             font-weight: bold;
             text-align: left;
-            padding: 6px 4px;
+            padding: 4px 2px;
             border: 1px solid #000;
-            font-size: 11pt;
+            font-size: 9pt;
             overflow: hidden;
             word-wrap: break-word;
         }
         
         td {
-            padding: 6px 4px;
+            padding: 4px 2px;
             border: 1px solid #000;
             overflow: hidden;
             word-wrap: break-word;
+            font-size: 9pt;
         }
         
         tr:nth-child(even) {
@@ -90,19 +97,21 @@
         /* Pied de page */
         .footer {
             text-align: center;
-            font-size: 10pt;
-            margin-top: 15px;
+            font-size: 8pt;
+            margin-top: 10px; /* Marge supérieure réduite */
             width: 100%;
         }
         
-        /* Ajustements de largeur des colonnes - pour format portrait */
-        .col-id { width: 15%; }
-        .col-prenom { width: 15%; }
-        .col-nom { width: 15%; }
+        /* Ajustements de largeur des colonnes */
+        .col-id { width: 13%; }
+        .col-prenom { width: 13%; }
+        .col-nom { width: 13%; }
         .col-sexe { width: 5%; }
-        .col-moy { width: 8%; }
-        .col-rang { width: 8%; }
-        .col-appreciation { width: 34%; }
+        .col-absences { width: 7%; }
+        .col-moy { width: 7%; }
+        .col-rang { width: 7%; }
+        .col-decision { width: 15%; }
+        .col-appreciation { width: 20%; }
         
         .text-center { text-align: center; }
         .text-right { text-align: right; }
@@ -126,6 +135,9 @@
         <div class="school-name">{{ $file->nom_etablissement ?? 'ÉTABLISSEMENT SCOLAIRE' }}</div>
         <div class="school-address">{{ $file->adresse_etablissement ?? 'Adresse de l\'établissement' }}</div>
         <div class="school-year">Année Scolaire: {{ $file->annee_scolaire ?? '2024-2025' }}</div>
+        <div class="class-info">
+            Niveau: {{ $file->niveau_nom ?? 'Non spécifié' }} - Classe: {{ $file->classe_nom ?? 'Non spécifié' }}
+        </div>
     </div>
     
     <!-- Titre du document -->
@@ -146,8 +158,10 @@
                 <th class="col-prenom">Prénom</th>
                 <th class="col-nom">Nom</th>
                 <th class="col-sexe">Sexe</th>
+                <th class="col-absences">Abs.</th>
                 <th class="col-moy">Moy</th>
                 <th class="col-rang">Rang</th>
+                <th class="col-decision">Décision</th>
                 <th class="col-appreciation">Appréciation</th>
             </tr>
         </thead>
@@ -158,9 +172,11 @@
                     <td>{{ $row['data'][1] }}</td>
                     <td>{{ $row['data'][2] }}</td>
                     <td class="text-center">{{ $row['data'][3] }}</td>
+                    <td class="text-center">{{ $row['data'][7] ?? '0' }}</td>
                     <td class="text-center"><strong>{{ $row['data'][9] }}</strong></td>
                     <td class="text-center">{{ $row['data'][10] }}</td>
-                    <td>{{ $row['data'][12] }}</td>
+                    <td class="text-center">{{ $row['data'][11] ?? '' }}</td>
+                    <td>{{ substr($row['data'][12] ?? '', 0, 50) }}{{ strlen($row['data'][12] ?? '') > 50 ? '...' : '' }}</td>
                 </tr>
             @endforeach
         </tbody>

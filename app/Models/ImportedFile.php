@@ -5,29 +5,41 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class ExcelData extends Model
+class ImportedFile extends Model
 {
     use HasFactory;
 
     protected $fillable = [
-        'file_id',
-        'row_number',
-        'data',
+        'nom_fichier',
+        'chemin',
+        'semestre',
+        'type',
+        'niveau_id',
+        'classe_id',
+        'nombre_lignes',
     ];
 
     /**
-     * Relation avec le fichier importé
+     * Relation avec le niveau
      */
-    public function importedFile()
+    public function niveau()
     {
-        return $this->belongsTo(ImportedFile::class, 'file_id');
+        return $this->belongsTo(Niveau::class);
     }
 
     /**
-     * Récupère les données décodées du JSON
+     * Relation avec la classe
      */
-    public function getDecodedDataAttribute()
+    public function classe()
     {
-        return json_decode($this->data);
+        return $this->belongsTo(Classe::class);
+    }
+
+    /**
+     * Relation avec les données Excel
+     */
+    public function excelData()
+    {
+        return $this->hasMany(ExcelData::class, 'file_id');
     }
 }

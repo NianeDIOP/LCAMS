@@ -22,6 +22,8 @@ Route::prefix('semestre1')->group(function () {
     Route::delete('/base/delete/{id}', [Semestre1Controller::class, 'deleteImportedFile'])->name('semestre1.deleteImportedFile');
     Route::get('/base/view/{id}/export-pdf', [Semestre1Controller::class, 'exportPDF'])->name('semestre1.exportPDF');
     Route::get('/base/view/{id}/export-excel', [Semestre1Controller::class, 'exportExcel'])->name('semestre1.exportExcel');
+    Route::get('/classes-by-niveau/{niveau_id}', [Semestre1Controller::class, 'getClassesByNiveau'])->name('semestre1.getClassesByNiveau');
+    
 });
 
 // Routes pour le Semestre 2

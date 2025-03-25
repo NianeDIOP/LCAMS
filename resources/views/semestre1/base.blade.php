@@ -143,49 +143,66 @@
                     </div>
                 </div>
                 <div class="card-body p-4">
-                    <form action="{{ route('semestre1.importer') }}" method="POST" enctype="multipart/form-data" id="import-form">
-                        @csrf
-                        
-                        <div class="row mb-4">
-                            <div class="col-md-8">
-                                <label for="excel_file" class="form-label">Fichier Excel PLANETE</label>
-                                <div class="upload-zone" id="upload-zone" onclick="document.getElementById('excel_file').click();">
-                                    <input type="file" id="excel_file" name="excel_file" class="d-none" accept=".xlsx,.xls" onchange="updateFileName()">
-                                    <div class="upload-icon">
-                                        <i class="fas fa-file-excel"></i>
-                                    </div>
-                                    <h4 class="upload-title">Déposer votre fichier ici</h4>
-                                    <p class="text-muted mb-0">ou cliquez pour choisir un fichier</p>
-                                    <div id="selected-file" class="mt-3 d-none">
-                                        <span class="badge bg-primary" id="file-name"></span>
-                                    </div>
+                <form action="{{ route('semestre1.importer') }}" method="POST" enctype="multipart/form-data" id="import-form">
+                    @csrf
+                    
+                    <div class="row mb-4">
+                        <div class="col-md-8">
+                            <label for="excel_file" class="form-label">Fichier Excel PLANETE</label>
+                            <div class="upload-zone" id="upload-zone" onclick="document.getElementById('excel_file').click();">
+                                <input type="file" id="excel_file" name="excel_file" class="d-none" accept=".xlsx,.xls" onchange="updateFileName()">
+                                <div class="upload-icon">
+                                    <i class="fas fa-file-excel"></i>
                                 </div>
-                            </div>
-                            
-                            <div class="col-md-4">
-                                <div class="mb-3">
-                                    <label for="type_fichier" class="form-label">Type de fichier</label>
-                                    <select class="form-select" id="type_fichier" name="type_fichier">
-                                        <option value="statistiques">Statistiques</option>
-                                        <option value="moyennes">Moyennes</option>
-                                        <option value="evaluations">Évaluations</option>
-                                    </select>
-                                </div>
-                                
-                                <div class="d-grid gap-2">
-                                    <button type="submit" class="btn btn-primary" id="import-btn" disabled>
-                                        <i class="fas fa-upload me-2"></i> Importer le fichier
-                                    </button>
-                                </div>
-                                
-                                <div class="mt-3">
-                                    <div class="alert alert-info p-2 small">
-                                        <i class="fas fa-info-circle me-1"></i> Les données seront importées telles quelles, sans modification.
-                                    </div>
+                                <h4 class="upload-title">Déposer votre fichier ici</h4>
+                                <p class="text-muted mb-0">ou cliquez pour choisir un fichier</p>
+                                <div id="selected-file" class="mt-3 d-none">
+                                    <span class="badge bg-primary" id="file-name"></span>
                                 </div>
                             </div>
                         </div>
-                    </form>
+                        
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="type_fichier" class="form-label">Type de fichier</label>
+                                <select class="form-select" id="type_fichier" name="type_fichier">
+                                    <option value="statistiques">Statistiques</option>
+                                    <option value="moyennes">Moyennes</option>
+                                    <option value="evaluations">Évaluations</option>
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="niveau_id" class="form-label">Niveau *</label>
+                                <select class="form-select" id="niveau_id" name="niveau_id" required>
+                                    <option value="">Sélectionnez un niveau</option>
+                                    @foreach($niveaux as $niveau)
+                                        <option value="{{ $niveau->id }}">{{ $niveau->nom }} ({{ $niveau->cycle }})</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="classe_id" class="form-label">Classe *</label>
+                                <select class="form-select" id="classe_id" name="classe_id" required disabled>
+                                    <option value="">Sélectionnez d'abord un niveau</option>
+                                </select>
+                            </div>
+                            
+                            <div class="d-grid gap-2">
+                                <button type="submit" class="btn btn-primary" id="import-btn" disabled>
+                                    <i class="fas fa-upload me-2"></i> Importer le fichier
+                                </button>
+                            </div>
+                            
+                            <div class="mt-3">
+                                <div class="alert alert-info p-2 small">
+                                    <i class="fas fa-info-circle me-1"></i> Les données seront associées à la classe sélectionnée.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
                 </div>
             </div>
             
@@ -199,52 +216,56 @@
                 <div class="card-body p-0">
                     @if(isset($importedFiles) && count($importedFiles) > 0)
                         <div class="table-responsive">
-                            <table class="table table-hover mb-0 file-table">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>Fichier</th>
-                                        <th>Type</th>
-                                        <th>Lignes</th>
-                                        <th>Date d'importation</th>
-                                        <th class="text-end">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach($importedFiles as $file)
-                                    <tr>
-                                        <td>
-                                            <div class="file-info">
-                                                <i class="fas fa-file-excel file-icon"></i>
-                                                <div>
-                                                    <div>{{ $file->nom_fichier }}</div>
-                                                </div>
+                        <table class="table table-hover mb-0 file-table">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Fichier</th>
+                                    <th>Type</th>
+                                    <th>Niveau</th>
+                                    <th>Classe</th>
+                                    <th>Lignes</th>
+                                    <th>Date d'importation</th>
+                                    <th class="text-end">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($importedFiles as $file)
+                                <tr>
+                                    <td>
+                                        <div class="file-info">
+                                            <i class="fas fa-file-excel file-icon"></i>
+                                            <div>
+                                                <div>{{ $file->nom_fichier }}</div>
                                             </div>
-                                        </td>
-                                        <td>
-                                            @if($file->type == 'statistiques')
-                                                <span class="badge bg-primary file-badge">Statistiques</span>
-                                            @elseif($file->type == 'moyennes')
-                                                <span class="badge bg-success file-badge">Moyennes</span>
-                                            @elseif($file->type == 'evaluations')
-                                                <span class="badge bg-info file-badge">Évaluations</span>
-                                            @else
-                                                <span class="badge bg-secondary file-badge">{{ $file->type }}</span>
-                                            @endif
-                                        </td>
-                                        <td>{{ $file->nombre_lignes }}</td>
-                                        <td>{{ \Carbon\Carbon::parse($file->created_at)->format('d/m/Y H:i') }}</td>
-                                        <td class="text-end file-actions">
-                                            <a href="{{ route('semestre1.viewImportedFile', $file->id) }}" class="btn btn-sm btn-outline-primary">
-                                                <i class="fas fa-eye"></i>
-                                            </a>
-                                            <button type="button" class="btn btn-sm btn-outline-danger delete-file" data-id="{{ $file->id }}" data-name="{{ $file->nom_fichier }}">
-                                                <i class="fas fa-trash"></i>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                    @endforeach
-                                </tbody>
-                            </table>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        @if($file->type == 'statistiques')
+                                            <span class="badge bg-primary file-badge">Statistiques</span>
+                                        @elseif($file->type == 'moyennes')
+                                            <span class="badge bg-success file-badge">Moyennes</span>
+                                        @elseif($file->type == 'evaluations')
+                                            <span class="badge bg-info file-badge">Évaluations</span>
+                                        @else
+                                            <span class="badge bg-secondary file-badge">{{ $file->type }}</span>
+                                        @endif
+                                    </td>
+                                    <td>{{ $file->niveau_nom ?? 'Non spécifié' }}</td>
+                                    <td>{{ $file->classe_nom ?? 'Non spécifié' }}</td>
+                                    <td>{{ $file->nombre_lignes }}</td>
+                                    <td>{{ \Carbon\Carbon::parse($file->created_at)->format('d/m/Y H:i') }}</td>
+                                    <td class="text-end file-actions">
+                                        <a href="{{ route('semestre1.viewImportedFile', $file->id) }}" class="btn btn-sm btn-outline-primary">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                        <button type="button" class="btn btn-sm btn-outline-danger delete-file" data-id="{{ $file->id }}" data-name="{{ $file->nom_fichier }}">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
                         </div>
                     @else
                         <div class="no-files-message">
@@ -301,17 +322,33 @@
             const fileName = input.files[0].name;
             fileNameElement.textContent = fileName;
             selectedFileSection.classList.remove('d-none');
-            importBtn.disabled = false;
+            updateImportButtonState();
         } else {
             selectedFileSection.classList.add('d-none');
-            importBtn.disabled = true;
+            updateImportButtonState();
         }
+    }
+    
+    // Mise à jour de l'état du bouton d'importation
+    function updateImportButtonState() {
+        const fileInput = document.getElementById('excel_file');
+        const niveauSelect = document.getElementById('niveau_id');
+        const classeSelect = document.getElementById('classe_id');
+        const importBtn = document.getElementById('import-btn');
+        
+        // Le bouton est actif si un fichier est sélectionné ET un niveau ET une classe sont sélectionnés
+        importBtn.disabled = !(fileInput.files.length > 0 && 
+                               niveauSelect.value !== '' && 
+                               classeSelect.value !== '');
     }
     
     // Gestion du drag & drop
     document.addEventListener('DOMContentLoaded', function() {
         const dropZone = document.getElementById('upload-zone');
+        const niveauSelect = document.getElementById('niveau_id');
+        const classeSelect = document.getElementById('classe_id');
         
+        // Gestion du drag & drop pour l'upload
         dropZone.addEventListener('dragover', function(e) {
             e.preventDefault();
             dropZone.classList.add('border-primary');
@@ -350,6 +387,66 @@
                 const modal = new bootstrap.Modal(document.getElementById('deleteFileModal'));
                 modal.show();
             });
+        });
+        
+        // Gestion du changement de niveau pour charger les classes associées
+        niveauSelect.addEventListener('change', function() {
+            const niveauId = this.value;
+            
+            // Réinitialiser et désactiver le sélecteur de classe si aucun niveau n'est sélectionné
+            if (!niveauId) {
+                classeSelect.innerHTML = '<option value="">Sélectionnez d\'abord un niveau</option>';
+                classeSelect.disabled = true;
+                updateImportButtonState();
+                return;
+            }
+            
+            // Récupérer les classes du niveau sélectionné via AJAX
+            fetch(`/semestre1/classes-by-niveau/${niveauId}`)
+                .then(response => response.json())
+                .then(data => {
+                    // Effacer les options précédentes
+                    classeSelect.innerHTML = '';
+                    
+                    // Ajouter l'option par défaut
+                    const defaultOption = document.createElement('option');
+                    defaultOption.value = '';
+                    defaultOption.textContent = 'Sélectionnez une classe';
+                    classeSelect.appendChild(defaultOption);
+                    
+                    // Ajouter les classes disponibles
+                    if (data.length > 0) {
+                        data.forEach(classe => {
+                            const option = document.createElement('option');
+                            option.value = classe.id;
+                            option.textContent = classe.nom;
+                            classeSelect.appendChild(option);
+                        });
+                        
+                        // Activer le sélecteur de classe
+                        classeSelect.disabled = false;
+                    } else {
+                        // Si aucune classe n'est disponible
+                        const noClassOption = document.createElement('option');
+                        noClassOption.value = '';
+                        noClassOption.textContent = 'Aucune classe disponible pour ce niveau';
+                        classeSelect.appendChild(noClassOption);
+                        classeSelect.disabled = true;
+                    }
+                    
+                    updateImportButtonState();
+                })
+                .catch(error => {
+                    console.error('Erreur lors de la récupération des classes:', error);
+                    classeSelect.innerHTML = '<option value="">Erreur de chargement</option>';
+                    classeSelect.disabled = true;
+                    updateImportButtonState();
+                });
+        });
+        
+        // Mettre à jour l'état du bouton d'importation lors du changement de classe
+        classeSelect.addEventListener('change', function() {
+            updateImportButtonState();
         });
     });
 </script>

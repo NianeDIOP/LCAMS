@@ -179,6 +179,7 @@
                 <i class="fas fa-info-circle me-2"></i> Informations sur le fichier
             </div>
             <div class="action-buttons">
+
                 <a href="{{ route('semestre1.exportPDF', ['id' => $file->id] + request()->query()) }}" class="btn btn-sm btn-danger">
                     <i class="fas fa-file-pdf me-1"></i> Exporter en PDF
                 </a>
