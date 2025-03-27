@@ -1,3 +1,4 @@
+{{-- resources/views/layouts/module.blade.php (Corrigé) --}}
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -10,6 +11,9 @@
     
     <!-- Font Awesome pour les icônes -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    
+    <!-- Chart.js pour les graphiques -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
     
     <!-- Police Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -39,12 +43,17 @@
             display: flex;
             flex-direction: column;
             min-height: 100vh;
+            overflow-x: hidden;
         }
         
         /* Layout principal */
         .main-wrapper {
             display: flex;
             flex: 1;
+            max-width: 1400px;
+            margin: 0 auto;
+            width: 100%;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.03);
         }
         
         /* Header du module */
@@ -53,12 +62,19 @@
             border-bottom: 1px solid rgba(0, 0, 0, 0.1);
             padding: 0.75rem 0;
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
         }
         
         .header-container {
             display: flex;
             align-items: center;
             justify-content: space-between;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 15px;
+            width: 100%;
         }
         
         .module-title {
@@ -111,14 +127,16 @@
         
         /* Sidebar */
         .sidebar {
-            width: 250px;
+            width: 240px;
+            min-width: 240px;
             background-color: var(--white);
             border-right: 1px solid rgba(0, 0, 0, 0.1);
             padding: 1.5rem 0;
-            height: calc(100vh - 62px - 40px);
+            height: calc(100vh - 62px);
             position: sticky;
             top: 62px;
             overflow-y: auto;
+            z-index: 900;
         }
         
         .sidebar-menu {
@@ -164,7 +182,8 @@
         .content {
             flex: 1;
             padding: 1.5rem;
-            min-width: 0;
+            background-color: var(--white);
+            overflow-x: hidden;
         }
         
         .page-header {
@@ -185,6 +204,92 @@
             font-size: 0.85rem;
         }
         
+        /* Card styles */
+        .card {
+            border: none;
+            border-radius: 0.5rem;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            margin-bottom: 1.5rem;
+            overflow: hidden;
+        }
+        
+        .card-header {
+            background-color: transparent;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+            font-weight: 600;
+            padding: 1rem 1.25rem;
+        }
+        
+        /* Dashboard styles */
+        .dashboard-container {
+            width: 100%;
+        }
+        
+        .dashboard-title {
+            background-color: var(--primary);
+            color: white;
+            font-size: 1rem;
+            font-weight: 600;
+            padding: 0.75rem 1rem;
+            border-radius: 0.375rem;
+            margin-bottom: 1.5rem;
+            text-align: center;
+        }
+        
+        .filter-container {
+            background-color: var(--white);
+            border-radius: 0.375rem;
+            margin-bottom: 1.5rem;
+            padding: 1rem;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+        
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .card-col-4 {
+            grid-column: span 4;
+        }
+        
+        .card-col-6 {
+            grid-column: span 6;
+        }
+        
+        .card-col-12 {
+            grid-column: span 12;
+        }
+        
+        .stat-card {
+            background-color: var(--white);
+            border-radius: 0.5rem;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            height: 100%;
+            overflow: hidden;
+        }
+        
+        .stat-card-header {
+            padding: 0.75rem 1rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+        }
+        
+        .stat-card-body {
+            padding: 1rem;
+        }
+        
+        /* Chart containers */
+        .chart-container {
+            width: 100%;
+            height: 250px;
+            position: relative;
+        }
+        
         /* Footer */
         .app-footer {
             background-color: var(--white);
@@ -195,6 +300,12 @@
             color: var(--secondary);
         }
         
+        .footer-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 15px;
+        }
+        
         /* Responsive adjustments */
         @media (max-width: 991.98px) {
             .main-wrapper {
@@ -203,6 +314,7 @@
             
             .sidebar {
                 width: 100%;
+                min-width: auto;
                 height: auto;
                 position: static;
                 border-right: none;
@@ -233,6 +345,24 @@
             .school-info {
                 display: none;
             }
+            
+            .cards-grid {
+                grid-template-columns: repeat(6, 1fr);
+            }
+            
+            .card-col-4, .card-col-6 {
+                grid-column: span 6;
+            }
+        }
+        
+        @media (max-width: 576px) {
+            .cards-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .card-col-4, .card-col-6, .card-col-12 {
+                grid-column: span 1;
+            }
         }
     </style>
     
@@ -241,9 +371,9 @@
 <body>
     <!-- Header du module -->
     <header class="module-header">
-        <div class="container header-container">
+        <div class="header-container">
             <div class="module-title">
-                <i class="fas fa-chart-line"></i> @yield('module-title', 'LCAMS')
+                @yield('module-title', '<i class="fas fa-chart-line me-2"></i> LCAMS')
             </div>
             
             <!-- Récupération des informations d'établissement -->
@@ -305,7 +435,7 @@
     
     <!-- Footer -->
     <footer class="app-footer">
-        <div class="container">
+        <div class="footer-container">
             <p class="mb-0">LCAMS - Logiciel de Calcul et Analyse des Moyennes Semestrielles</p>
         </div>
     </footer>
