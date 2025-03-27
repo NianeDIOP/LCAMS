@@ -152,145 +152,95 @@ public function index()
    /**
  * Affiche le tableau de bord du semestre 1
  */
-public function dashboard()
+public function dashboard(Request $request)
 {
-    // Récupérer les informations générales
-    $totalEleves = DB::table('excel_data')
+    // 1. Récupération des paramètres de filtrage
+    $niveau_id = $request->input('niveau_id');
+    $classe_id = $request->input('classe_id');
+    $sexe = $request->input('sexe');
+    $min_moyenne = $request->input('min_moyenne');
+    $max_moyenne = $request->input('max_moyenne');
+
+    // 2. Configuration de l'établissement
+    $etablissement = DB::table('etablissements')->first();
+
+    // 3. Statistiques fichiers
+    $fileCount = DB::table('imported_files')
+        ->where('semestre', 1)
+        ->count();
+
+    // 4. Requête de base pour les élèves
+    $query = DB::table('excel_data')
         ->join('imported_files', 'excel_data.file_id', '=', 'imported_files.id')
-        ->where('imported_files.semestre', 1)
+        ->where('imported_files.semestre', 1);
+
+    // 5. Application des filtres
+    if ($niveau_id) {
+        $query->where('imported_files.niveau_id', $niveau_id);
+    }
+
+    if ($classe_id) {
+        $query->where('imported_files.classe_id', $classe_id);
+    }
+
+    if ($sexe) {
+        $query->whereRaw("JSON_EXTRACT(data, '$[3]') = ?", [$sexe]);
+    }
+
+    if ($min_moyenne !== null) {
+        $query->whereRaw('CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2)) >= ?', [$min_moyenne]);
+    }
+
+    if ($max_moyenne !== null) {
+        $query->whereRaw('CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2)) <= ?', [$max_moyenne]);
+    }
+
+    // 6. Calcul des statistiques élèves
+    $totalEleves = $query->clone()->distinct()->count(DB::raw('JSON_EXTRACT(data, "$[0]")'));
+    
+    $fillesCount = $query->clone()
+        ->whereRaw('JSON_EXTRACT(data, "$[3]") IN ("F", "f")')
         ->distinct()
         ->count(DB::raw('JSON_EXTRACT(data, "$[0]")'));
     
-    // Répartition par sexe
-    $fillesCount = DB::table('excel_data')
-        ->join('imported_files', 'excel_data.file_id', '=', 'imported_files.id')
-        ->where('imported_files.semestre', 1)
-        ->whereRaw('JSON_EXTRACT(data, "$[3]") = "F" OR JSON_EXTRACT(data, "$[3]") = "f"')
+    $garconsCount = $query->clone()
+        ->whereRaw('JSON_EXTRACT(data, "$[3]") IN ("H", "h", "M", "m")')
         ->distinct()
         ->count(DB::raw('JSON_EXTRACT(data, "$[0]")'));
-    
-    $garconsCount = DB::table('excel_data')
-        ->join('imported_files', 'excel_data.file_id', '=', 'imported_files.id')
-        ->where('imported_files.semestre', 1)
-        ->whereRaw('JSON_EXTRACT(data, "$[3]") = "H" OR JSON_EXTRACT(data, "$[3]") = "M" OR JSON_EXTRACT(data, "$[3]") = "h" OR JSON_EXTRACT(data, "$[3]") = "m"')
-        ->distinct()
-        ->count(DB::raw('JSON_EXTRACT(data, "$[0]")'));
-    
-    // Pourcentages
-    $pourcentageFilles = $totalEleves > 0 ? round(($fillesCount / $totalEleves) * 100) : 0;
-    $pourcentageGarcons = $totalEleves > 0 ? round(($garconsCount / $totalEleves) * 100) : 0;
-    
-    // Élèves ayant la moyenne
-    $elevesAvecMoyenne = DB::table('excel_data')
-        ->join('imported_files', 'excel_data.file_id', '=', 'imported_files.id')
-        ->where('imported_files.semestre', 1)
+
+    $elevesAvecMoyenne = $query->clone()
         ->whereRaw('CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2)) >= 10')
         ->distinct()
         ->count(DB::raw('JSON_EXTRACT(data, "$[0]")'));
-    
-    $fillesAvecMoyenne = DB::table('excel_data')
-        ->join('imported_files', 'excel_data.file_id', '=', 'imported_files.id')
-        ->where('imported_files.semestre', 1)
-        ->whereRaw('CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2)) >= 10')
-        ->whereRaw('JSON_EXTRACT(data, "$[3]") = "F" OR JSON_EXTRACT(data, "$[3]") = "f"')
-        ->distinct()
-        ->count(DB::raw('JSON_EXTRACT(data, "$[0]")'));
-    
-    $garconsAvecMoyenne = DB::table('excel_data')
-        ->join('imported_files', 'excel_data.file_id', '=', 'imported_files.id')
-        ->where('imported_files.semestre', 1)
-        ->whereRaw('CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2)) >= 10')
-        ->whereRaw('JSON_EXTRACT(data, "$[3]") = "H" OR JSON_EXTRACT(data, "$[3]") = "M" OR JSON_EXTRACT(data, "$[3]") = "h" OR JSON_EXTRACT(data, "$[3]") = "m"')
-        ->distinct()
-        ->count(DB::raw('JSON_EXTRACT(data, "$[0]")'));
-    
-    // Taux de réussite
-    $tauxReussite = $totalEleves > 0 ? round(($elevesAvecMoyenne / $totalEleves) * 100) : 0;
-    $tauxReussiteFilles = $fillesCount > 0 ? round(($fillesAvecMoyenne / $fillesCount) * 100) : 0;
-    $tauxReussiteGarcons = $garconsCount > 0 ? round(($garconsAvecMoyenne / $garconsCount) * 100) : 0;
-    
-    // Indicateurs de performance
-    $moyenneGenerale = DB::table('excel_data')
-        ->join('imported_files', 'excel_data.file_id', '=', 'imported_files.id')
-        ->where('imported_files.semestre', 1)
+
+    $tauxReussite = $totalEleves > 0 
+        ? round(($elevesAvecMoyenne / $totalEleves) * 100)
+        : 0;
+
+    $noteMoyenne = $query->clone()
         ->whereRaw('JSON_EXTRACT(data, "$[9]") IS NOT NULL')
         ->select(DB::raw('AVG(CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2))) as moyenne'))
-        ->first();
-    
-    $moyenneMax = DB::table('excel_data')
-        ->join('imported_files', 'excel_data.file_id', '=', 'imported_files.id')
-        ->where('imported_files.semestre', 1)
-        ->whereRaw('JSON_EXTRACT(data, "$[9]") IS NOT NULL')
-        ->select(DB::raw('MAX(CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2))) as max_moyenne'))
-        ->first();
-    
-    $moyenneMin = DB::table('excel_data')
-        ->join('imported_files', 'excel_data.file_id', '=', 'imported_files.id')
-        ->where('imported_files.semestre', 1)
-        ->whereRaw('JSON_EXTRACT(data, "$[9]") IS NOT NULL')
-        ->select(DB::raw('MIN(CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2))) as min_moyenne'))
-        ->first();
-    
-    $noteMoyenne = $moyenneGenerale ? number_format($moyenneGenerale->moyenne, 2) : '0.00';
-    $notePlusForte = $moyenneMax ? number_format($moyenneMax->max_moyenne, 2) : '0.00';
-    $notePlusFaible = $moyenneMin ? number_format($moyenneMin->min_moyenne, 2) : '0.00';
-    
-    // Mentions
-    $felicitationsCount = DB::table('excel_data')
-        ->join('imported_files', 'excel_data.file_id', '=', 'imported_files.id')
-        ->where('imported_files.semestre', 1)
-        ->whereRaw('CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2)) >= 16')
-        ->distinct()
-        ->count(DB::raw('JSON_EXTRACT(data, "$[0]")'));
-    
-    $encouragementsCount = DB::table('excel_data')
-        ->join('imported_files', 'excel_data.file_id', '=', 'imported_files.id')
-        ->where('imported_files.semestre', 1)
-        ->whereRaw('CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2)) >= 14 AND CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2)) < 16')
-        ->distinct()
-        ->count(DB::raw('JSON_EXTRACT(data, "$[0]")'));
-    
-    $tableauHonneurCount = DB::table('excel_data')
-        ->join('imported_files', 'excel_data.file_id', '=', 'imported_files.id')
-        ->where('imported_files.semestre', 1)
-        ->whereRaw('CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2)) >= 12 AND CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2)) < 14')
-        ->distinct()
-        ->count(DB::raw('JSON_EXTRACT(data, "$[0]")'));
-    
-    // Observations
-    $mieuxFaireCount = DB::table('excel_data')
-        ->join('imported_files', 'excel_data.file_id', '=', 'imported_files.id')
-        ->where('imported_files.semestre', 1)
-        ->whereRaw('CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2)) >= 10 AND CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2)) < 12')
-        ->distinct()
-        ->count(DB::raw('JSON_EXTRACT(data, "$[0]")'));
-    
-    $doitContinuerCount = DB::table('excel_data')
-        ->join('imported_files', 'excel_data.file_id', '=', 'imported_files.id')
-        ->where('imported_files.semestre', 1)
-        ->whereRaw('CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2)) >= 8 AND CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2)) < 10')
-        ->distinct()
-        ->count(DB::raw('JSON_EXTRACT(data, "$[0]")'));
-    
-    $risqueRedoublerCount = DB::table('excel_data')
-        ->join('imported_files', 'excel_data.file_id', '=', 'imported_files.id')
-        ->where('imported_files.semestre', 1)
-        ->whereRaw('CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2)) < 8')
-        ->distinct()
-        ->count(DB::raw('JSON_EXTRACT(data, "$[0]")'));
-    
-    // Statistiques par niveau
+        ->first()->moyenne ?? 0;
+
+    // 7. Statistiques détaillées par niveau
     $niveaux = DB::table('imported_files as f')
         ->join('niveaux as n', 'f.niveau_id', '=', 'n.id')
         ->where('f.semestre', 1)
-        ->distinct()
         ->select('n.id', 'n.nom', 'n.code')
-        ->orderBy('n.ordre')
+        ->distinct()
         ->get();
-    
+
     $statsNiveaux = [];
-    
     foreach ($niveaux as $niveau) {
+        // Calcul de l'effectif
+        $effectif = DB::table('excel_data')
+            ->join('imported_files', 'excel_data.file_id', '=', 'imported_files.id')
+            ->where('imported_files.semestre', 1)
+            ->where('imported_files.niveau_id', $niveau->id)
+            ->distinct()
+            ->count(DB::raw('JSON_EXTRACT(data, "$[0]")'));
+
+        // Calcul de la moyenne
         $moyenneNiveau = DB::table('excel_data')
             ->join('imported_files', 'excel_data.file_id', '=', 'imported_files.id')
             ->where('imported_files.semestre', 1)
@@ -298,76 +248,48 @@ public function dashboard()
             ->whereRaw('JSON_EXTRACT(data, "$[9]") IS NOT NULL')
             ->select(DB::raw('AVG(CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2))) as moyenne_niveau'))
             ->first();
-        
-        $moyenneValeur = $moyenneNiveau ? number_format($moyenneNiveau->moyenne_niveau, 2) : '0.00';
-        
+
+        // Calcul du taux de réussite
+        $reussiteCount = DB::table('excel_data')
+            ->join('imported_files', 'excel_data.file_id', '=', 'imported_files.id')
+            ->where('imported_files.semestre', 1)
+            ->where('imported_files.niveau_id', $niveau->id)
+            ->whereRaw('CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2)) >= 10')
+            ->distinct()
+            ->count(DB::raw('JSON_EXTRACT(data, "$[0]")'));
+
+        $tauxReussiteNiveau = $effectif > 0 
+            ? round(($reussiteCount / $effectif) * 100)
+            : 0;
+
         $statsNiveaux[] = [
             'id' => $niveau->id,
             'nom' => $niveau->nom,
             'code' => $niveau->code,
-            'moyenne' => $moyenneValeur
+            'moyenne' => $moyenneNiveau ? number_format($moyenneNiveau->moyenne_niveau, 2) : '0.00',
+            'effectif' => $effectif,
+            'taux_reussite' => $tauxReussiteNiveau
         ];
     }
-    
-    // Statistiques des retards et absences par classe
-    $classes = DB::table('imported_files as f')
-        ->join('classes as c', 'f.classe_id', '=', 'c.id')
-        ->where('f.semestre', 1)
-        ->distinct()
-        ->select('c.id', 'c.nom')
-        ->orderBy('c.nom')
-        ->get();
-    
-    $statsClasses = [];
-    
-    foreach ($classes as $classe) {
-        // Calculer le nombre total de retards pour cette classe
-        $retards = DB::table('excel_data')
-            ->join('imported_files', 'excel_data.file_id', '=', 'imported_files.id')
-            ->where('imported_files.semestre', 1)
-            ->where('imported_files.classe_id', $classe->id)
-            ->whereRaw('JSON_EXTRACT(data, "$[6]") IS NOT NULL')
-            ->sum(DB::raw('CAST(JSON_EXTRACT(data, "$[6]") AS SIGNED)'));
-        
-        // Calculer le nombre total d'absences pour cette classe
-        $absences = DB::table('excel_data')
-            ->join('imported_files', 'excel_data.file_id', '=', 'imported_files.id')
-            ->where('imported_files.semestre', 1)
-            ->where('imported_files.classe_id', $classe->id)
-            ->whereRaw('JSON_EXTRACT(data, "$[7]") IS NOT NULL')
-            ->sum(DB::raw('CAST(JSON_EXTRACT(data, "$[7]") AS SIGNED)'));
-        
-        $statsClasses[] = [
-            'id' => $classe->id,
-            'nom' => $classe->nom,
-            'retards' => $retards,
-            'absences' => $absences
-        ];
-    }
-    
+
+    // 8. Récupération des filtres
+    $niveauxTous = Niveau::orderBy('ordre')->get();
+    $classes = Classe::where('active', 1)->orderBy('nom')->get();
+
+    // 9. Retour de la vue avec toutes les variables
     return view('semestre1.dashboard', compact(
-        'totalEleves', 
+        'totalEleves',
         'fillesCount',
         'garconsCount',
-        'pourcentageFilles',
-        'pourcentageGarcons',
         'elevesAvecMoyenne',
-        'fillesAvecMoyenne',
-        'garconsAvecMoyenne',
         'tauxReussite',
-        'tauxReussiteFilles',
-        'tauxReussiteGarcons',
         'noteMoyenne',
-        'notePlusForte',
-        'notePlusFaible',
-        'felicitationsCount',
-        'encouragementsCount',
-        'tableauHonneurCount',
-        'mieuxFaireCount',
-        'doitContinuerCount',
-        'risqueRedoublerCount',
         'statsNiveaux',
-        'statsClasses'
+        'niveauxTous',
+        'niveaux',
+        'classes',
+        'etablissement',
+        'fileCount'
     ));
 }
 
