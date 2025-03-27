@@ -178,8 +178,12 @@
             <div>
                 <i class="fas fa-info-circle me-2"></i> Informations sur le fichier
             </div>
+            <!-- Dans la section des boutons d'action, ajoutez ce bouton -->
             <div class="action-buttons">
-
+                <a href="{{ route('semestre1.viewDetailedData', $file->id) }}" class="btn btn-sm btn-info">
+                    <i class="fas fa-table me-1"></i> Données détaillées
+                </a>
+                
                 <a href="{{ route('semestre1.exportPDF', ['id' => $file->id] + request()->query()) }}" class="btn btn-sm btn-danger">
                     <i class="fas fa-file-pdf me-1"></i> Exporter en PDF
                 </a>

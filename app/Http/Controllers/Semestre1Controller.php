@@ -17,10 +17,134 @@ class Semestre1Controller extends Controller
     /**
      * Affiche la page principale du semestre 1
      */
-    public function index()
-    {
-        return view('semestre1.index');
+   /**
+ * Affiche la page principale du semestre 1 avec des statistiques
+ */
+public function index()
+{
+    // Récupérer les statistiques des fichiers importés
+    $fileCount = DB::table('imported_files')
+        ->where('semestre', 1)
+        ->count();
+    
+    // Récupérer le nombre d'élèves (distinct) dans les fichiers importés
+    $studentCount = DB::table('excel_data')
+        ->join('imported_files', 'excel_data.file_id', '=', 'imported_files.id')
+        ->where('imported_files.semestre', 1)
+        ->distinct()
+        ->count(DB::raw('JSON_EXTRACT(excel_data.data, "$[0]")'));  // IEN est généralement à l'indice 0
+    
+    // Récupérer les classes actives pour le semestre 1
+    $classCount = DB::table('classes')
+        ->where('active', 1)
+        ->count();
+    
+    // Calculer la moyenne générale à partir de tous les fichiers importés
+    $avgQuery = DB::table('excel_data')
+        ->join('imported_files', 'excel_data.file_id', '=', 'imported_files.id')
+        ->where('imported_files.semestre', 1)
+        ->select(DB::raw('AVG(CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2))) as average_grade'));
+    
+    $avgResult = $avgQuery->first();
+    $averageGrade = $avgResult ? round($avgResult->average_grade, 2) : 0;
+    
+    // Récupérer les derniers fichiers importés
+    $recentFiles = DB::table('imported_files AS f')
+        ->leftJoin('niveaux AS n', 'f.niveau_id', '=', 'n.id')
+        ->leftJoin('classes AS c', 'f.classe_id', '=', 'c.id')
+        ->select('f.*', 'n.nom AS niveau_nom', 'c.nom AS classe_nom')
+        ->where('f.semestre', 1)
+        ->orderBy('f.created_at', 'desc')
+        ->limit(5)
+        ->get();
+    
+    // Calculer les statistiques de performance
+    $performanceStats = [
+        'excellent' => 0,   // >= 16
+        'good' => 0,        // >= 14 et < 16
+        'average' => 0,     // >= 10 et < 14
+        'poor' => 0,        // < 10
+    ];
+    
+    // Si nous avons des fichiers importés, calculons les statistiques de performance
+    if ($fileCount > 0) {
+        $excellentCount = DB::table('excel_data')
+            ->join('imported_files', 'excel_data.file_id', '=', 'imported_files.id')
+            ->where('imported_files.semestre', 1)
+            ->whereRaw('CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2)) >= 16')
+            ->count();
+        
+        $goodCount = DB::table('excel_data')
+            ->join('imported_files', 'excel_data.file_id', '=', 'imported_files.id')
+            ->where('imported_files.semestre', 1)
+            ->whereRaw('CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2)) >= 14')
+            ->whereRaw('CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2)) < 16')
+            ->count();
+        
+        $averageCount = DB::table('excel_data')
+            ->join('imported_files', 'excel_data.file_id', '=', 'imported_files.id')
+            ->where('imported_files.semestre', 1)
+            ->whereRaw('CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2)) >= 10')
+            ->whereRaw('CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2)) < 14')
+            ->count();
+        
+        $poorCount = DB::table('excel_data')
+            ->join('imported_files', 'excel_data.file_id', '=', 'imported_files.id')
+            ->where('imported_files.semestre', 1)
+            ->whereRaw('CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2)) < 10')
+            ->count();
+        
+        $totalCount = $excellentCount + $goodCount + $averageCount + $poorCount;
+        
+        if ($totalCount > 0) {
+            $performanceStats = [
+                'excellent' => round($excellentCount / $totalCount * 100),
+                'good' => round($goodCount / $totalCount * 100),
+                'average' => round($averageCount / $totalCount * 100),
+                'poor' => round($poorCount / $totalCount * 100),
+            ];
+        }
     }
+    
+    // Obtenir la répartition par sexe
+    $genderStats = [
+        'male' => 0,
+        'female' => 0,
+    ];
+    
+    if ($fileCount > 0) {
+        $maleCount = DB::table('excel_data')
+            ->join('imported_files', 'excel_data.file_id', '=', 'imported_files.id')
+            ->where('imported_files.semestre', 1)
+            ->whereRaw('JSON_EXTRACT(data, "$[3]") = "H" OR JSON_EXTRACT(data, "$[3]") = "h"')
+            ->count();
+        
+        $femaleCount = DB::table('excel_data')
+            ->join('imported_files', 'excel_data.file_id', '=', 'imported_files.id')
+            ->where('imported_files.semestre', 1)
+            ->whereRaw('JSON_EXTRACT(data, "$[3]") = "F" OR JSON_EXTRACT(data, "$[3]") = "f"')
+            ->count();
+        
+        $totalGender = $maleCount + $femaleCount;
+        
+        if ($totalGender > 0) {
+            $genderStats = [
+                'male' => round($maleCount / $totalGender * 100),
+                'female' => round($femaleCount / $totalGender * 100),
+            ];
+        }
+    }
+    
+    return view('semestre1.index', compact(
+        'fileCount',
+        'studentCount',
+        'classCount',
+        'averageGrade',
+        'recentFiles',
+        'performanceStats',
+        'genderStats'
+    ));
+}
 
     /**
      * Affiche le tableau de bord du semestre 1
@@ -91,6 +215,9 @@ class Semestre1Controller extends Controller
     /**
  * Importe un fichier Excel
  */
+/**
+ * Importe un fichier Excel
+ */
 public function importer(Request $request)
 {
     // Valider le fichier et les données
@@ -140,6 +267,12 @@ public function importer(Request $request)
             
             for ($col = 'A'; $col <= $highestColumn; $col++) {
                 $cellValue = $worksheet->getCell($col . $row)->getValue();
+                
+                // Normalisation de la valeur de Sexe (colonne D, index 3)
+                if ($col === 'D' && ($cellValue === 'M' || $cellValue === 'm')) {
+                    $cellValue = 'H';
+                }
+                
                 $rowData[] = $cellValue;
                 
                 // Vérifier si la cellule a une valeur (uniquement pour les colonnes A à K)
@@ -213,6 +346,196 @@ public function importer(Request $request)
     }
 }
 
+/**
+ * Affiche les données détaillées d'un fichier importé (troisième onglet)
+ */
+/**
+ * Affiche les données détaillées d'un fichier importé (troisième onglet)
+ */
+/**
+ * Affiche les données détaillées d'un fichier importé (troisième onglet)
+ */
+/**
+ * Affiche les données détaillées d'un fichier importé (onglet détaillé)
+ */
+/**
+ * Affiche les données détaillées d'un fichier importé (troisième onglet)
+ */
+/**
+ * Affiche toutes les données détaillées d'un fichier importé
+ */
+/**
+ * Affiche les données brutes du troisième onglet d'un fichier importé
+ */
+
+/**
+ * Affiche le contenu du troisième onglet d'un fichier importé avec ajout de la colonne Sexe du premier onglet
+ */
+public function viewDetailedData($id, Request $request)
+{
+    // Récupérer les infos du fichier
+    $file = DB::table('imported_files')->find($id);
+    
+    if (!$file) {
+        return redirect()->route('semestre1.base')
+            ->with('error', 'Fichier non trouvé.');
+    }
+    
+    try {
+        // Récupérer le chemin du fichier
+        $filePath = Storage::path($file->chemin);
+        
+        // Charger le fichier Excel
+        $spreadsheet = IOFactory::load($filePath);
+        
+        // Vérifier si le troisième onglet existe
+        $sheetCount = $spreadsheet->getSheetCount();
+        if ($sheetCount < 3) {
+            return redirect()->route('semestre1.viewImportedFile', $id)
+                ->with('error', 'Le fichier ne contient pas de troisième onglet.');
+        }
+        
+        // Extraire d'abord les données sur le sexe depuis le premier onglet
+        $firstSheet = $spreadsheet->getSheet(0);
+        $genderData = [];
+        
+        // Déterminer la colonne qui contient le sexe (normalement colonne D)
+        $genderColumn = 'D';
+        
+        // Vérifier l'en-tête pour confirmer que c'est bien la colonne Sexe
+        $sexeHeaderValue = $firstSheet->getCell($genderColumn . '1')->getValue();
+        if (strtolower($sexeHeaderValue) != 'sexe') {
+            // Si ce n'est pas "Sexe", chercher la bonne colonne
+            for ($col = 'A'; $col <= 'G'; $col++) {
+                $headerValue = $firstSheet->getCell($col . '1')->getValue();
+                if (strtolower($headerValue) == 'sexe') {
+                    $genderColumn = $col;
+                    break;
+                }
+            }
+        }
+        
+        // Maintenant que nous avons la colonne du sexe, extraire les données à partir de la ligne 2
+        // La colonne IEN servira de clé pour faire la correspondance
+        $highestRow = $firstSheet->getHighestRow();
+        for ($row = 2; $row <= $highestRow; $row++) {
+            $ien = $firstSheet->getCell('A' . $row)->getValue();
+            $gender = $firstSheet->getCell($genderColumn . $row)->getValue();
+            if (!empty($ien)) {
+                $genderData[$ien] = $gender;
+            }
+        }
+        
+        // Maintenant, traiter le troisième onglet
+        $worksheet = $spreadsheet->getSheet(2);
+        $sheetName = $worksheet->getTitle();
+        
+        // Récupérer les dimensions
+        $highestRow = $worksheet->getHighestRow();
+        $highestColumnLetter = $worksheet->getHighestColumn();
+        $highestColumnIndex = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($highestColumnLetter);
+        
+        // Générer la liste des colonnes
+        $allColumns = [];
+        for ($colIndex = 1; $colIndex <= $highestColumnIndex; $colIndex++) {
+            $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($colIndex);
+            $allColumns[] = $colLetter;
+        }
+        
+        // Lire toutes les données brutes
+        $rawData = [];
+        for ($row = 1; $row <= $highestRow; $row++) {
+            $rowData = [];
+            
+            // Extraire les données des colonnes existantes
+            foreach ($allColumns as $col) {
+                $cell = $worksheet->getCell($col . $row);
+                $value = $cell->getValue();
+                
+                // Gestion des cellules fusionnées
+                foreach ($worksheet->getMergeCells() as $mergeCell) {
+                    if ($cell->isInRange($mergeCell)) {
+                        $mergeRange = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::splitRange($mergeCell);
+                        $firstCell = $mergeRange[0][0];
+                        $value = $worksheet->getCell($firstCell)->getValue();
+                        break;
+                    }
+                }
+                
+                $rowData[$col] = $value;
+            }
+            
+            // Pour les lignes de données (à partir de la ligne 3), ajouter la colonne Sexe après la colonne Nom
+            if ($row >= 3) {
+                $ien = $rowData['A'] ?? '';
+                $sexe = $genderData[$ien] ?? '';
+                
+                // Créer un nouveau tableau avec la colonne Sexe après Nom
+                $newRowData = [];
+                $sexeInserted = false;
+                
+                foreach ($rowData as $col => $value) {
+                    $newRowData[$col] = $value;
+                    
+                    // Après la colonne C (Nom), insérer la colonne Sexe
+                    if ($col === 'C' && !$sexeInserted) {
+                        $newRowData['SEXE'] = $sexe;
+                        $sexeInserted = true;
+                    }
+                }
+                
+                $rowData = $newRowData;
+            } else if ($row === 1) {
+                // Pour la première ligne d'en-tête (entêtes principaux)
+                $newRowData = [];
+                $sexeInserted = false;
+                
+                foreach ($rowData as $col => $value) {
+                    $newRowData[$col] = $value;
+                    
+                    if ($col === 'C' && !$sexeInserted) {
+                        $newRowData['SEXE'] = 'Sexe';
+                        $sexeInserted = true;
+                    }
+                }
+                
+                $rowData = $newRowData;
+            } else if ($row === 2) {
+                // Pour la deuxième ligne (sous-en-têtes)
+                $newRowData = [];
+                $sexeInserted = false;
+                
+                foreach ($rowData as $col => $value) {
+                    $newRowData[$col] = $value;
+                    
+                    if ($col === 'C' && !$sexeInserted) {
+                        $newRowData['SEXE'] = '';  // Cellule vide pour la sous-entête
+                        $sexeInserted = true;
+                    }
+                }
+                
+                $rowData = $newRowData;
+            }
+            
+            $rawData[] = $rowData;
+        }
+        
+        // Ajouter SEXE à la liste des colonnes après la colonne C
+        $modifiedColumns = [];
+        foreach ($allColumns as $index => $col) {
+            $modifiedColumns[] = $col;
+            if ($col === 'C') {
+                $modifiedColumns[] = 'SEXE';
+            }
+        }
+        
+        return view('semestre1.view_detailed_data', compact('file', 'rawData', 'modifiedColumns', 'sheetName'));
+        
+    } catch (\Exception $e) {
+        return redirect()->route('semestre1.viewImportedFile', $id)
+            ->with('error', 'Erreur lors de la lecture du troisième onglet: ' . $e->getMessage() . ' Ligne: ' . $e->getLine());
+    }
+}
     /**
      * Affiche les données d'un fichier importé avec filtres
      */
