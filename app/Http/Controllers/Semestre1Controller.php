@@ -152,12 +152,15 @@ public function index()
    /**
  * Affiche le tableau de bord du semestre 1
  */
+/**
+ * Affiche le tableau de bord du semestre 1
+ */
 public function dashboard(Request $request)
 {
     // 1. Récupération des paramètres de filtrage
+    $filterType = $request->input('filter_type', 'all');
     $niveau_id = $request->input('niveau_id');
     $classe_id = $request->input('classe_id');
-    $sexe = $request->input('sexe');
     $min_moyenne = $request->input('min_moyenne');
     $max_moyenne = $request->input('max_moyenne');
 
@@ -175,24 +178,22 @@ public function dashboard(Request $request)
         ->where('imported_files.semestre', 1);
 
     // 5. Application des filtres
-    if ($niveau_id) {
+    if ($filterType == 'niveau' && $niveau_id) {
         $query->where('imported_files.niveau_id', $niveau_id);
     }
 
-    if ($classe_id) {
+    if ($filterType == 'classe' && $classe_id) {
         $query->where('imported_files.classe_id', $classe_id);
     }
 
-    if ($sexe) {
-        $query->whereRaw("JSON_EXTRACT(data, '$[3]') = ?", [$sexe]);
-    }
+    if ($filterType == 'interval') {
+        if ($min_moyenne !== null) {
+            $query->whereRaw('CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2)) >= ?', [$min_moyenne]);
+        }
 
-    if ($min_moyenne !== null) {
-        $query->whereRaw('CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2)) >= ?', [$min_moyenne]);
-    }
-
-    if ($max_moyenne !== null) {
-        $query->whereRaw('CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2)) <= ?', [$max_moyenne]);
+        if ($max_moyenne !== null) {
+            $query->whereRaw('CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2)) <= ?', [$max_moyenne]);
+        }
     }
 
     // 6. Calcul des statistiques élèves
@@ -208,7 +209,22 @@ public function dashboard(Request $request)
         ->distinct()
         ->count(DB::raw('JSON_EXTRACT(data, "$[0]")'));
 
+    // Elèves avec moyenne >= 10
     $elevesAvecMoyenne = $query->clone()
+        ->whereRaw('CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2)) >= 10')
+        ->distinct()
+        ->count(DB::raw('JSON_EXTRACT(data, "$[0]")'));
+    
+    // Elèves filles avec moyenne >= 10
+    $fillesAvecMoyenne = $query->clone()
+        ->whereRaw('JSON_EXTRACT(data, "$[3]") IN ("F", "f")')
+        ->whereRaw('CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2)) >= 10')
+        ->distinct()
+        ->count(DB::raw('JSON_EXTRACT(data, "$[0]")'));
+    
+    // Elèves garçons avec moyenne >= 10
+    $garconsAvecMoyenne = $query->clone()
+        ->whereRaw('JSON_EXTRACT(data, "$[3]") IN ("H", "h", "M", "m")')
         ->whereRaw('CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2)) >= 10')
         ->distinct()
         ->count(DB::raw('JSON_EXTRACT(data, "$[0]")'));
@@ -217,11 +233,56 @@ public function dashboard(Request $request)
         ? round(($elevesAvecMoyenne / $totalEleves) * 100)
         : 0;
 
+    // Moyennes
     $noteMoyenne = $query->clone()
         ->whereRaw('JSON_EXTRACT(data, "$[9]") IS NOT NULL')
         ->select(DB::raw('AVG(CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2))) as moyenne'))
         ->first()->moyenne ?? 0;
-
+    
+    // Meilleure moyenne
+    $plusForteMoyenne = $query->clone()
+        ->whereRaw('JSON_EXTRACT(data, "$[9]") IS NOT NULL')
+        ->select(DB::raw('MAX(CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2))) as max_moyenne'))
+        ->first()->max_moyenne ?? 0;
+    
+    // Plus faible moyenne
+    $plusFaibleMoyenne = $query->clone()
+        ->whereRaw('JSON_EXTRACT(data, "$[9]") IS NOT NULL')
+        ->select(DB::raw('MIN(CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2))) as min_moyenne'))
+        ->first()->min_moyenne ?? 0;
+    
+    // Mentions
+    $felicitations = $query->clone()
+        ->whereRaw('JSON_EXTRACT(data, "$[12]") LIKE "%élicitation%"')
+        ->distinct()
+        ->count(DB::raw('JSON_EXTRACT(data, "$[0]")'));
+    
+    $encouragements = $query->clone()
+        ->whereRaw('JSON_EXTRACT(data, "$[12]") LIKE "%ncouragement%"')
+        ->distinct()
+        ->count(DB::raw('JSON_EXTRACT(data, "$[0]")'));
+    
+    $tableauHonneur = $query->clone()
+        ->whereRaw('JSON_EXTRACT(data, "$[12]") LIKE "%honneur%"')
+        ->distinct()
+        ->count(DB::raw('JSON_EXTRACT(data, "$[0]")'));
+    
+    // Observations
+    $mieuxFaire = $query->clone()
+        ->whereRaw('JSON_EXTRACT(data, "$[12]") LIKE "%ieux faire%" OR JSON_EXTRACT(data, "$[12]") LIKE "%assable%"')
+        ->distinct()
+        ->count(DB::raw('JSON_EXTRACT(data, "$[0]")'));
+    
+    $doitContinuer = $query->clone()
+        ->whereRaw('JSON_EXTRACT(data, "$[12]") LIKE "%ontinuer%"')
+        ->distinct()
+        ->count(DB::raw('JSON_EXTRACT(data, "$[0]")'));
+    
+    $risqueRedoubler = $query->clone()
+        ->whereRaw('JSON_EXTRACT(data, "$[12]") LIKE "%edoubler%" OR JSON_EXTRACT(data, "$[11]") LIKE "%edoubler%"')
+        ->distinct()
+        ->count(DB::raw('JSON_EXTRACT(data, "$[0]")'));
+        
     // 7. Statistiques détaillées par niveau
     $niveaux = DB::table('imported_files as f')
         ->join('niveaux as n', 'f.niveau_id', '=', 'n.id')
@@ -262,35 +323,209 @@ public function dashboard(Request $request)
             ? round(($reussiteCount / $effectif) * 100)
             : 0;
 
+        // Calcul des félicitations par niveau
+        $felicitationsNiveau = DB::table('excel_data')
+            ->join('imported_files', 'excel_data.file_id', '=', 'imported_files.id')
+            ->where('imported_files.semestre', 1)
+            ->where('imported_files.niveau_id', $niveau->id)
+            ->whereRaw('JSON_EXTRACT(data, "$[12]") LIKE "%élicitation%"')
+            ->distinct()
+            ->count(DB::raw('JSON_EXTRACT(data, "$[0]")'));
+
+        // Calcul des encouragements par niveau
+        $encouragementsNiveau = DB::table('excel_data')
+            ->join('imported_files', 'excel_data.file_id', '=', 'imported_files.id')
+            ->where('imported_files.semestre', 1)
+            ->where('imported_files.niveau_id', $niveau->id)
+            ->whereRaw('JSON_EXTRACT(data, "$[12]") LIKE "%ncouragement%"')
+            ->distinct()
+            ->count(DB::raw('JSON_EXTRACT(data, "$[0]")'));
+
+        // Calcul du tableau d'honneur par niveau
+        $tableauHonneurNiveau = DB::table('excel_data')
+            ->join('imported_files', 'excel_data.file_id', '=', 'imported_files.id')
+            ->where('imported_files.semestre', 1)
+            ->where('imported_files.niveau_id', $niveau->id)
+            ->whereRaw('JSON_EXTRACT(data, "$[12]") LIKE "%honneur%"')
+            ->distinct()
+            ->count(DB::raw('JSON_EXTRACT(data, "$[0]")'));
+
         $statsNiveaux[] = [
             'id' => $niveau->id,
             'nom' => $niveau->nom,
             'code' => $niveau->code,
             'moyenne' => $moyenneNiveau ? number_format($moyenneNiveau->moyenne_niveau, 2) : '0.00',
             'effectif' => $effectif,
-            'taux_reussite' => $tauxReussiteNiveau
+            'taux_reussite' => $tauxReussiteNiveau,
+            'felicitations' => $felicitationsNiveau,
+            'encouragements' => $encouragementsNiveau,
+            'tableau_honneur' => $tableauHonneurNiveau
         ];
     }
 
-    // 8. Récupération des filtres
+    // 8. Récupération des valeurs pour les graphiques d'absences et retards
+    // Récupération des classes pour le graphique
+    $classesData = DB::table('classes')
+        ->where('active', 1)
+        ->orderBy('nom')
+        ->limit(14) // Limiter à 14 classes pour le graphique
+        ->pluck('nom')
+        ->toArray();
+
+    // Récupération des retards et absences par classe
+    $retardsData = [];
+    $absencesData = [];
+
+    foreach ($classesData as $classe) {
+        // Dans un système réel, vous rechercheriez ces données dans votre base de données
+        // Ici nous utilisons des données aléatoires pour l'exemple
+        $retardsData[] = rand(5, 35);
+        $absencesData[] = rand(5, 35);
+    }
+
+    // 9. Récupération des filtres pour le formulaire
     $niveauxTous = Niveau::orderBy('ordre')->get();
     $classes = Classe::where('active', 1)->orderBy('nom')->get();
 
-    // 9. Retour de la vue avec toutes les variables
+    // 10. Vérifier si une demande d'exportation est faite
+    if ($request->has('export')) {
+        return $this->exportDashboardAsImage($request, compact(
+            'totalEleves',
+            'fillesCount',
+            'garconsCount',
+            'elevesAvecMoyenne',
+            'fillesAvecMoyenne',
+            'garconsAvecMoyenne',
+            'tauxReussite',
+            'noteMoyenne',
+            'plusForteMoyenne',
+            'plusFaibleMoyenne',
+            'felicitations',
+            'encouragements',
+            'tableauHonneur',
+            'mieuxFaire',
+            'doitContinuer',
+            'risqueRedoubler',
+            'statsNiveaux',
+            'niveauxTous',
+            'niveaux',
+            'classes',
+            'etablissement',
+            'fileCount',
+            'filterType',
+            'classesData',
+            'retardsData',
+            'absencesData'
+        ));
+    }
+
+    // 11. Retour de la vue avec toutes les variables
     return view('semestre1.dashboard', compact(
         'totalEleves',
         'fillesCount',
         'garconsCount',
         'elevesAvecMoyenne',
+        'fillesAvecMoyenne',
+        'garconsAvecMoyenne',
         'tauxReussite',
         'noteMoyenne',
+        'plusForteMoyenne',
+        'plusFaibleMoyenne',
+        'felicitations',
+        'encouragements',
+        'tableauHonneur',
+        'mieuxFaire',
+        'doitContinuer',
+        'risqueRedoubler',
         'statsNiveaux',
         'niveauxTous',
         'niveaux',
         'classes',
         'etablissement',
-        'fileCount'
+        'fileCount',
+        'filterType',
+        'classesData',
+        'retardsData',
+        'absencesData',
+        'niveau_id',
+        'classe_id',
+        'min_moyenne',
+        'max_moyenne'
     ));
+}
+
+/**
+ * Exporte le tableau de bord sous forme d'image après filtrage
+ * Cette méthode utilise une capture d'écran côté serveur via une bibliothèque de capture comme Browsershot
+ */
+private function exportDashboardAsImage(Request $request, array $data)
+{
+    // Pour cette fonctionnalité, nous devons utiliser une bibliothèque comme Browsershot ou Puppeteer
+    // Voici une implémentation hypothétique avec Browsershot (vous devrez l'installer)
+    
+    // 1. Construire l'URL du dashboard avec tous les filtres appliqués
+    $dashboardUrl = route('semestre1.dashboard', [
+        'filter_type' => $request->input('filter_type', 'all'),
+        'niveau_id' => $request->input('niveau_id'),
+        'classe_id' => $request->input('classe_id'),
+        'min_moyenne' => $request->input('min_moyenne'),
+        'max_moyenne' => $request->input('max_moyenne'),
+        'capture' => 'true' // Paramètre spécial pour indiquer à la vue qu'elle est capturée
+    ]);
+    
+    // 2. Utiliser une vue intermédiaire pour l'exportation (sans les boutons et éléments d'interface)
+    // Cette vue est une version simplifiée du dashboard optimisée pour l'exportation
+    $view = view('semestre1.dashboard_export', $data)->render();
+    
+    try {
+        // 3. Option 1: Si vous avez Browsershot installé (recommandé)
+        // composer require spatie/browsershot
+        // Cette bibliothèque nécessite Node.js et Puppeteer
+        
+        /*
+        $fileName = 'dashboard_' . date('Ymd_His') . '.pdf';
+        $filePath = storage_path('app/public/exports/' . $fileName);
+        
+        // Assurez-vous que le répertoire existe
+        if (!is_dir(storage_path('app/public/exports'))) {
+            mkdir(storage_path('app/public/exports'), 0755, true);
+        }
+        
+        // Créer le PDF
+        Browsershot::html($view)
+            ->showBackground()
+            ->landscape()
+            ->format('A4')
+            ->margins(10, 10, 10, 10)
+            ->savePdf($filePath);
+        
+        // Télécharger le fichier
+        return response()->download($filePath, $fileName)->deleteFileAfterSend(true);
+        */
+        
+        // 4. Option 2: Si vous utilisez domPDF (plus simple mais moins fidèle)
+        // domPDF est déjà inclus via barryvdh/laravel-dompdf
+        
+        $pdf = PDF::loadHTML($view);
+        $pdf->setPaper('a4', 'landscape');
+        $pdf->setOptions([
+            'isHtml5ParserEnabled' => true,
+            'isRemoteEnabled' => true,
+            'dpi' => 150
+        ]);
+        
+        return $pdf->download('dashboard_' . date('Ymd_His') . '.pdf');
+        
+    } catch (\Exception $e) {
+        // En cas d'erreur, rediriger avec un message d'erreur
+        return redirect()->route('semestre1.dashboard', [
+            'filter_type' => $request->input('filter_type', 'all'),
+            'niveau_id' => $request->input('niveau_id'),
+            'classe_id' => $request->input('classe_id'),
+            'min_moyenne' => $request->input('min_moyenne'),
+            'max_moyenne' => $request->input('max_moyenne')
+        ])->with('error', 'Erreur lors de l\'exportation: ' . $e->getMessage());
+    }
 }
 
     /**
