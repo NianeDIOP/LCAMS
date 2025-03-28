@@ -1,44 +1,47 @@
+<!-- resources/views/semestre1/base.blade.php -->
 @extends('layouts.module')
 
 @section('title', 'Base des moyennes - Semestre 1')
 
-@section('module-title')
-    <i class="fas fa-calendar-alt me-2"></i> Semestre 1
+@section('module-icon')
+<i class="fas fa-calendar-alt me-2"></i>
 @endsection
+
+@section('module-title', 'Semestre 1')
 
 @section('page-title', 'Base des moyennes')
 
 @section('breadcrumb')
-    <li class="breadcrumb-item"><a href="{{ route('semestre1.index') }}">Semestre 1</a></li>
-    <li class="breadcrumb-item active">Base des moyennes</li>
+<li class="breadcrumb-item"><a href="{{ route('semestre1.index') }}">Semestre 1</a></li>
+<li class="breadcrumb-item active">Base des moyennes</li>
 @endsection
 
 @section('sidebar-menu')
-    <li>
-        <a href="{{ route('semestre1.index') }}" class="{{ request()->routeIs('semestre1.index') ? 'active' : '' }}">
-            <span class="icon"><i class="fas fa-home"></i></span> Vue d'ensemble
-        </a>
-    </li>
-    <li>
-        <a href="{{ route('semestre1.dashboard') }}" class="{{ request()->routeIs('semestre1.dashboard') ? 'active' : '' }}">
-            <span class="icon"><i class="fas fa-tachometer-alt"></i></span> Tableau de bord
-        </a>
-    </li>
-    <li>
-        <a href="{{ route('semestre1.analyse') }}" class="{{ request()->routeIs('semestre1.analyse') ? 'active' : '' }}">
-            <span class="icon"><i class="fas fa-chart-line"></i></span> Analyse des disciplines
-        </a>
-    </li>
-    <li>
-        <a href="{{ route('semestre1.rapports') }}" class="{{ request()->routeIs('semestre1.rapports') ? 'active' : '' }}">
-            <span class="icon"><i class="fas fa-file-alt"></i></span> Génération des rapports
-        </a>
-    </li>
-    <li>
-        <a href="{{ route('semestre1.base') }}" class="{{ request()->routeIs('semestre1.base') ? 'active' : '' }}">
-            <span class="icon"><i class="fas fa-database"></i></span> Base des moyennes
-        </a>
-    </li>
+<li>
+    <a href="{{ route('semestre1.index') }}" class="nav-link ps-3 py-2 {{ request()->routeIs('semestre1.index') ? 'active bg-light fw-bold' : '' }}">
+        <i class="fas fa-home me-2"></i> Vue d'ensemble
+    </a>
+</li>
+<li>
+    <a href="{{ route('semestre1.dashboard') }}" class="nav-link ps-3 py-2 {{ request()->routeIs('semestre1.dashboard') ? 'active bg-light fw-bold' : '' }}">
+        <i class="fas fa-tachometer-alt me-2"></i> Tableau de bord
+    </a>
+</li>
+<li>
+    <a href="{{ route('semestre1.analyse') }}" class="nav-link ps-3 py-2 {{ request()->routeIs('semestre1.analyse') ? 'active bg-light fw-bold' : '' }}">
+        <i class="fas fa-chart-line me-2"></i> Analyse des disciplines
+    </a>
+</li>
+<li>
+    <a href="{{ route('semestre1.rapports') }}" class="nav-link ps-3 py-2 {{ request()->routeIs('semestre1.rapports') ? 'active bg-light fw-bold' : '' }}">
+        <i class="fas fa-file-alt me-2"></i> Génération des rapports
+    </a>
+</li>
+<li>
+    <a href="{{ route('semestre1.base') }}" class="nav-link ps-3 py-2 {{ request()->routeIs('semestre1.base') ? 'active bg-light fw-bold' : '' }}">
+        <i class="fas fa-database me-2"></i> Base des moyennes
+    </a>
+</li>
 @endsection
 
 @section('styles')
@@ -132,7 +135,7 @@
 </style>
 @endsection
 
-@section('content')
+@section('module-content')
     <div class="row">
         <div class="col-lg-12">
             <!-- Section d'importation -->

@@ -1,43 +1,46 @@
+<!-- resources/views/semestre1/index.blade.php -->
 @extends('layouts.module')
 
-@section('title', 'Semestre 1')
+@section('title', 'Semestre 1 - Vue d\'ensemble')
 
-@section('module-title')
-    <i class="fas fa-calendar-alt me-2"></i> Semestre 1
+@section('module-icon')
+<i class="fas fa-calendar-alt me-2"></i>
 @endsection
+
+@section('module-title', 'Semestre 1')
 
 @section('page-title', 'Vue d\'ensemble')
 
 @section('breadcrumb')
-    <li class="breadcrumb-item active">Semestre 1</li>
+<li class="breadcrumb-item active">Semestre 1</li>
 @endsection
 
 @section('sidebar-menu')
-    <li>
-        <a href="{{ route('semestre1.index') }}" class="{{ request()->routeIs('semestre1.index') ? 'active' : '' }}">
-            <span class="icon"><i class="fas fa-home"></i></span> Vue d'ensemble
-        </a>
-    </li>
-    <li>
-        <a href="{{ route('semestre1.dashboard') }}" class="{{ request()->routeIs('semestre1.dashboard') ? 'active' : '' }}">
-            <span class="icon"><i class="fas fa-tachometer-alt"></i></span> Tableau de bord
-        </a>
-    </li>
-    <li>
-        <a href="{{ route('semestre1.analyse') }}" class="{{ request()->routeIs('semestre1.analyse') ? 'active' : '' }}">
-            <span class="icon"><i class="fas fa-chart-line"></i></span> Analyse des disciplines
-        </a>
-    </li>
-    <li>
-        <a href="{{ route('semestre1.rapports') }}" class="{{ request()->routeIs('semestre1.rapports') ? 'active' : '' }}">
-            <span class="icon"><i class="fas fa-file-alt"></i></span> Génération des rapports
-        </a>
-    </li>
-    <li>
-        <a href="{{ route('semestre1.base') }}" class="{{ request()->routeIs('semestre1.base') ? 'active' : '' }}">
-            <span class="icon"><i class="fas fa-database"></i></span> Base des moyennes
-        </a>
-    </li>
+<li>
+    <a href="{{ route('semestre1.index') }}" class="nav-link ps-3 py-2 {{ request()->routeIs('semestre1.index') ? 'active bg-light fw-bold' : '' }}">
+        <i class="fas fa-home me-2"></i> Vue d'ensemble
+    </a>
+</li>
+<li>
+    <a href="{{ route('semestre1.dashboard') }}" class="nav-link ps-3 py-2 {{ request()->routeIs('semestre1.dashboard') ? 'active bg-light fw-bold' : '' }}">
+        <i class="fas fa-tachometer-alt me-2"></i> Tableau de bord
+    </a>
+</li>
+<li>
+    <a href="{{ route('semestre1.analyse') }}" class="nav-link ps-3 py-2 {{ request()->routeIs('semestre1.analyse') ? 'active bg-light fw-bold' : '' }}">
+        <i class="fas fa-chart-line me-2"></i> Analyse des disciplines
+    </a>
+</li>
+<li>
+    <a href="{{ route('semestre1.rapports') }}" class="nav-link ps-3 py-2 {{ request()->routeIs('semestre1.rapports') ? 'active bg-light fw-bold' : '' }}">
+        <i class="fas fa-file-alt me-2"></i> Génération des rapports
+    </a>
+</li>
+<li>
+    <a href="{{ route('semestre1.base') }}" class="nav-link ps-3 py-2 {{ request()->routeIs('semestre1.base') ? 'active bg-light fw-bold' : '' }}">
+        <i class="fas fa-database me-2"></i> Base des moyennes
+    </a>
+</li>
 @endsection
 
 @section('styles')
@@ -269,7 +272,7 @@
 </style>
 @endsection
 
-@section('content')
+@section('module-content')
     <!-- Statistiques -->
     <div class="row mb-4">
         <!-- Élèves -->
@@ -501,6 +504,15 @@
                 <li>Utilisez l'<strong>Analyse des disciplines</strong> pour des informations détaillées</li>
                 <li>Générez des <strong>Rapports</strong> personnalisés selon vos besoins</li>
             </ol>
-        </div>
-    @endif
+</div>
+@endif
+@endsection
+
+@section('scripts')
+<script>
+    // Script pour animation des cartes si nécessaire
+    document.addEventListener('DOMContentLoaded', function() {
+        // Animation des statistiques si nécessaire
+    });
+</script>
 @endsection
