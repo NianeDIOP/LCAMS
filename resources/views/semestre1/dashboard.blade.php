@@ -8,7 +8,7 @@
 
 @section('module-title', 'Semestre 1')
 
-@section('page-title', 'Tableau de bord')
+@section('page-title', 'Tableau de bord analytique')
 
 @section('breadcrumb')
 <li class="breadcrumb-item"><a href="{{ route('semestre1.index') }}">Semestre 1</a></li>
@@ -46,618 +46,902 @@
 @section('styles')
 <style>
     /* Styles généraux */
-    .dashboard-container {
-        margin-bottom: 20px;
+    .dashboard-wrapper {
+        background-color: #f8f9fa;
+        padding: 0;
+        border-radius: 8px;
+        margin-bottom: 1.5rem;
     }
     
     .dashboard-header {
-        background-color: #004d40;
+        background: linear-gradient(135deg, #0062cc, #0097a7);
         color: white;
-        padding: 10px 15px;
-        font-weight: bold;
-        text-align: center;
-        border-radius: 5px 5px 0 0;
-        text-transform: uppercase;
-        margin-bottom: 0;
-        letter-spacing: 1px;
+        padding: 1.25rem;
+        border-radius: 8px 8px 0 0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
     }
     
-    .dashboard-subheader {
-        background-color: #00796b;
-        color: white;
-        padding: 6px 15px;
-        font-weight: bold;
-        text-align: center;
-        font-size: 0.9rem;
+    .dashboard-title {
+        margin: 0;
+        font-size: 1.25rem;
+        font-weight: 600;
         text-transform: uppercase;
-        margin-bottom: 0;
         letter-spacing: 0.5px;
     }
     
-    .data-section {
-        background-color: #f2f9f9;
-        margin-bottom: 20px;
-        border-radius: 0 0 5px 5px;
-        overflow: hidden;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    .dashboard-controls {
+        display: flex;
+        gap: 10px;
+    }
+    
+    .dashboard-content {
+        padding: 1.25rem;
     }
     
     .filter-container {
         background-color: #fff;
-        padding: 15px;
-        margin-bottom: 20px;
-        border-radius: 5px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    }
-    
-    .filter-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 10px;
+        padding: 1rem;
+        border-radius: 8px;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
     }
     
     .filter-title {
-        font-weight: bold;
-        color: #004d40;
+        font-size: 0.9rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
+        color: #495057;
         display: flex;
         align-items: center;
     }
     
     .filter-title i {
-        margin-right: 5px;
+        margin-right: 6px;
+        color: #0062cc;
     }
     
-    .filter-form {
+    .filter-body {
         display: flex;
         flex-wrap: wrap;
-        gap: 10px;
+        gap: 12px;
     }
     
     .filter-group {
         flex: 1;
-        min-width: 160px;
+        min-width: 200px;
     }
     
-    /* Cartes de données */
-    .stat-card {
+    .stats-card {
         background-color: white;
-        padding: 15px;
-        border-radius: 0;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        height: 100%;
+        transition: transform 0.2s, box-shadow 0.2s;
+        overflow: hidden;
     }
     
-    .stat-category {
-        background-color: #00a67c;
-        color: white;
-        text-align: center;
-        padding: 8px;
-        font-weight: bold;
-        text-transform: uppercase;
+    .stats-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+    
+    .stats-header {
+        padding: 1rem;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+        background-color: #f8f9fa;
+    }
+    
+    .stats-title {
         margin: 0;
-        letter-spacing: 0.5px;
-    }
-    
-    .stat-value {
-        font-size: 2.5rem;
-        font-weight: bold;
-        text-align: center;
-        margin: 10px 0;
-    }
-    
-    .stat-label {
         font-size: 0.9rem;
-        text-align: center;
-        text-transform: uppercase;
-        color: #666;
         font-weight: 600;
-        border-bottom: 1px solid #e0e0e0;
-        padding-bottom: 5px;
+        color: #495057;
     }
     
-    .stat-number {
-        font-size: 1.8rem;
-        font-weight: bold;
+    .stats-body {
+        padding: 1.25rem;
         text-align: center;
-        color: #212121;
     }
     
-    /* Donut chart */
+    .stats-value {
+        font-size: 2rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+        color: #0062cc;
+    }
+    
+    .stats-label {
+        font-size: 0.85rem;
+        color: #6c757d;
+    }
+    
+    .stats-footer {
+        background-color: #f8f9fa;
+        padding: 0.75rem 1rem;
+        border-top: 1px solid rgba(0, 0, 0, 0.05);
+        font-size: 0.8rem;
+        color: #6c757d;
+    }
+    
+    .chart-container {
+        position: relative;
+        height: 300px;
+        width: 100%;
+    }
+    
     .donut-container {
-        width: 150px;
+        position: relative;
         height: 150px;
         margin: 0 auto;
-        position: relative;
     }
     
-    .donut-center {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
+    .stats-card .progress {
+        height: 8px;
+        margin: 1rem 0;
+    }
+    
+    .metrics-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+        margin-top: 1rem;
+    }
+    
+    .metric-item {
+        background-color: #f8f9fa;
+        padding: 0.75rem;
+        border-radius: 6px;
         text-align: center;
-        width: 80px;
-        height: 80px;
-        background: white;
-        border-radius: 50%;
+    }
+    
+    .metric-value {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: #0062cc;
+        margin-bottom: 0.25rem;
+    }
+    
+    .metric-label {
+        font-size: 0.75rem;
+        color: #6c757d;
+    }
+    
+    .table-stats {
+        font-size: 0.85rem;
+    }
+    
+    .table-stats th {
+        background-color: #f8f9fa;
+        font-weight: 600;
+    }
+    
+    .icon-box {
+        width: 40px;
+        height: 40px;
         display: flex;
-        flex-direction: column;
         align-items: center;
         justify-content: center;
+        background-color: rgba(0, 98, 204, 0.1);
+        color: #0062cc;
+        border-radius: 8px;
+        margin-right: 1rem;
+        font-size: 1.1rem;
     }
     
-    .donut-percent {
-        font-size: 1.8rem;
-        font-weight: bold;
-        color: #f39c12;
+    .section {
+        margin-bottom: 1.5rem;
     }
     
-    .donut-label {
-        font-size: 0.75rem;
+    .section-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+    
+    .section-title {
+        font-size: 1.1rem;
         font-weight: 600;
-        text-transform: uppercase;
+        margin: 0;
+        color: #343a40;
     }
     
     .gender-stats {
         display: flex;
-        justify-content: space-around;
-        margin-top: 10px;
+        justify-content: center;
+        margin-top: 1rem;
+        gap: 2rem;
     }
     
     .gender-stat {
         text-align: center;
     }
     
-    .gender-label {
-        font-size: 0.85rem;
+    .gender-icon {
+        font-size: 1.5rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .gender-value {
+        font-size: 1.25rem;
         font-weight: 600;
+        margin-bottom: 0.25rem;
     }
     
-    .gender-percent {
-        font-size: 1.2rem;
-        font-weight: bold;
+    .gender-label {
+        font-size: 0.8rem;
+        color: #6c757d;
     }
     
-    /* Performances */
-    .performance-box {
+    .male-color {
+        color: #0062cc;
+    }
+    
+    .female-color {
+        color: #e83e8c;
+    }
+    
+    .performance-indicator {
         display: flex;
-        justify-content: space-between;
-        padding: 15px;
-        text-align: center;
+        align-items: center;
+        margin-bottom: 1rem;
     }
     
-    .performance-item {
+    .indicator-value {
+        font-size: 1.75rem;
+        font-weight: 700;
+        margin-right: 1rem;
+        min-width: 70px;
+    }
+    
+    .indicator-details {
         flex: 1;
     }
     
-    .performance-label {
+    .indicator-label {
         font-size: 0.85rem;
-        text-transform: uppercase;
-        color: #666;
         font-weight: 600;
-        margin-bottom: 5px;
+        margin-bottom: 0.25rem;
     }
     
-    .performance-value {
-        font-size: 1.5rem;
-        font-weight: bold;
-    }
-    
-    /* Graphique */
-    .chart-container {
-        width: 100%;
-        height: 240px;
-        padding: 15px;
-        background-color: white;
-    }
-    
-    /* Tableau de données */
-    .data-table-container {
-        margin: 0;
-        background-color: white;
+    .indicator-bar {
+        height: 8px;
+        background-color: #e9ecef;
+        border-radius: 4px;
         overflow: hidden;
     }
     
-    .data-table {
-        width: 100%;
-        margin-bottom: 0;
-        font-size: 0.85rem;
+    .indicator-fill {
+        height: 100%;
+        border-radius: 4px;
     }
     
-    .data-table th {
-        background-color: #e0f2f1;
-        color: #004d40;
-        padding: 10px;
-        font-weight: 600;
-        text-align: center;
-    }
-    
-    .data-table td {
-        padding: 8px 10px;
-        text-align: center;
-        border-bottom: 1px solid #e0e0e0;
-    }
-    
-    /* Indicateurs */
-    .observations-grid {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 0;
-    }
-    
-    .observations-item {
-        padding: 10px;
-        text-align: center;
-        background-color: white;
-    }
-    
-    .observations-label {
-        font-size: 0.85rem;
-        text-transform: uppercase;
-        color: #666;
-        font-weight: 600;
-        margin-bottom: 5px;
-    }
-    
-    .observations-value {
-        font-size: 1.8rem;
-        font-weight: bold;
-    }
-    
-    /* Bouton de téléchargement */
-    .telecharger-btn {
-        position: absolute;
-        right: 15px;
-        top: 10px;
-        z-index: 10;
-    }
-    
-    /* Séparateur vertical */
-    .separator {
-        width: 30px;
-        background-color: #e0f2f1;
+    .observation-card {
         display: flex;
-        flex-direction: column;
-        justify-content: center;
         align-items: center;
-        color: #004d40;
-        font-weight: bold;
-        writing-mode: vertical-rl;
-        text-orientation: mixed;
-        transform: rotate(180deg);
-        text-transform: uppercase;
-        letter-spacing: 1px;
+        background-color: white;
+        padding: 1rem;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        margin-bottom: 1rem;
+    }
+    
+    .observation-icon {
+        width: 45px;
+        height: 45px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        margin-right: 1rem;
+        color: white;
+        font-size: 1.25rem;
+    }
+    
+    .observation-details {
+        flex: 1;
+    }
+    
+    .observation-title {
         font-size: 0.9rem;
+        font-weight: 600;
+        margin-bottom: 0.25rem;
     }
     
-    .arrow-down {
-        width: 0; 
-        height: 0; 
-        border-left: 15px solid transparent;
-        border-right: 15px solid transparent;
-        border-top: 15px solid #004d40;
-        margin: 0 auto;
+    .observation-value {
+        font-size: 1.5rem;
+        font-weight: 700;
     }
     
-    /* Adaptations pour mobile */
+    .observation-footer {
+        font-size: 0.75rem;
+        color: #6c757d;
+        margin-top: 0.25rem;
+    }
+    
+    .export-button {
+        position: fixed;
+        bottom: 30px;
+        right: 30px;
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        background-color: #0062cc;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        z-index: 999;
+        transition: all 0.3s;
+    }
+    
+    .export-button:hover {
+        transform: scale(1.1);
+        background-color: #004c9e;
+    }
+    
+    /* Pour les petits écrans */
     @media (max-width: 768px) {
-        .filter-group {
-            flex: 100%;
-        }
-        
-        .performance-box {
+        .dashboard-header {
             flex-direction: column;
-            gap: 10px;
+            align-items: flex-start;
         }
         
-        .observations-grid {
+        .dashboard-controls {
+            margin-top: 1rem;
+            width: 100%;
+            justify-content: space-between;
+        }
+        
+        .metrics-grid {
             grid-template-columns: repeat(2, 1fr);
+        }
+    }
+    
+    @media (max-width: 576px) {
+        .metrics-grid {
+            grid-template-columns: 1fr;
         }
     }
 </style>
 @endsection
+
 @section('module-content')
-    <!-- En-tête du tableau de bord -->
-    <div class="dashboard-container">
-        <h4 class="dashboard-header">TABLEAU DE BORD DES RESULTATS DES MOYENNES GENERALES DU PREMIER SEMESTRE</h4>
-        <h5 class="dashboard-subheader">SEMESTRE 1 
-            @if($filterType == 'niveau' && isset($niveau_id) && isset($niveauxTous))
-                {{ $niveauxTous->firstWhere('id', $niveau_id)->nom ?? '' }}
-            @elseif($filterType == 'classe' && isset($classe_id) && isset($classes))
-                {{ $classes->firstWhere('id', $classe_id)->nom ?? '' }}
-            @endif
-        </h5>
+<div class="dashboard-wrapper">
+    <div class="dashboard-header">
+        <!-- En-tête simple sans boutons -->
     </div>
     
-    <!-- Section de filtres -->
-    <div class="filter-container">
-        <div class="filter-header">
+    <div class="dashboard-content">
+        <!-- Filtres simplifiés -->
+        <div class="filter-container">
             <div class="filter-title">
-                <i class="fas fa-filter me-2"></i> FILTRER
+                <i class="fas fa-filter"></i> Filtres
             </div>
-            <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#filterCollapse" aria-expanded="false" aria-controls="filterCollapse">
-                <i class="fas fa-chevron-down"></i>
-            </button>
-        </div>
-        
-        <div class="collapse show" id="filterCollapse">
-            <form id="dashboardFilterForm" action="{{ route('semestre1.dashboard') }}" method="GET" class="filter-form">
-                <div class="filter-group">
-                    <label for="filter_type" class="form-label">Type de filtre</label>
-                    <select class="form-select form-select-sm" id="filter_type" name="filter_type">
-                        <option value="all" {{ ($filterType ?? 'all') == 'all' ? 'selected' : '' }}>Tous</option>
-                        <option value="niveau" {{ ($filterType ?? '') == 'niveau' ? 'selected' : '' }}>Niveau</option>
-                        <option value="classe" {{ ($filterType ?? '') == 'classe' ? 'selected' : '' }}>Classe</option>
-                        <option value="sexe" {{ ($filterType ?? '') == 'sexe' ? 'selected' : '' }}>Sexe</option>
-                        <option value="interval" {{ ($filterType ?? '') == 'interval' ? 'selected' : '' }}>Intervalle</option>
-                    </select>
-                </div>
-                
-                <div class="filter-group niveau-filter" style="{{ ($filterType ?? '') != 'niveau' && ($filterType ?? '') != 'classe' ? 'display:none' : '' }}">
-                    <label for="niveau_id" class="form-label">Niveau</label>
-                    <select class="form-select form-select-sm" id="niveau_id" name="niveau_id" {{ ($filterType ?? '') != 'niveau' && ($filterType ?? '') != 'classe' ? 'disabled' : '' }}>
-                        <option value="">Sélectionner un niveau</option>
-                        @foreach($niveauxTous ?? [] as $niveau)
-                            <option value="{{ $niveau->id }}" {{ ($niveau_id ?? '') == $niveau->id ? 'selected' : '' }}>{{ $niveau->nom }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                
-                <div class="filter-group classe-filter" style="{{ ($filterType ?? '') != 'classe' ? 'display:none' : '' }}">
-                    <label for="classe_id" class="form-label">Classe</label>
-                    <select class="form-select form-select-sm" id="classe_id" name="classe_id" {{ ($filterType ?? '') != 'classe' ? 'disabled' : '' }}>
-                        <option value="">Sélectionner une classe</option>
-                        @foreach($classes ?? [] as $classe)
-                            <option value="{{ $classe->id }}" {{ ($classe_id ?? '') == $classe->id ? 'selected' : '' }}>{{ $classe->nom }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                
-                <div class="filter-group sexe-filter" style="{{ ($filterType ?? '') != 'sexe' ? 'display:none' : '' }}">
-                    <label for="sexe" class="form-label">Sexe</label>
-                    <select class="form-select form-select-sm" id="sexe" name="sexe" {{ ($filterType ?? '') != 'sexe' ? 'disabled' : '' }}>
-                        <option value="">Tous</option>
-                        <option value="F" {{ (request('sexe') ?? '') == 'F' ? 'selected' : '' }}>Filles</option>
-                        <option value="G" {{ (request('sexe') ?? '') == 'G' ? 'selected' : '' }}>Garçons</option>
-                    </select>
-                </div>
-                
-                <div class="filter-group interval-filter" style="{{ ($filterType ?? '') != 'interval' ? 'display:none' : '' }}">
-                    <label for="min_moyenne" class="form-label">Moyenne min.</label>
-                    <input type="number" class="form-control form-control-sm" id="min_moyenne" name="min_moyenne" step="0.01" min="0" max="20" value="{{ $min_moyenne ?? '' }}" {{ ($filterType ?? '') != 'interval' ? 'disabled' : '' }}>
-                </div>
-                
-                <div class="filter-group interval-filter" style="{{ ($filterType ?? '') != 'interval' ? 'display:none' : '' }}">
-                    <label for="max_moyenne" class="form-label">Moyenne max.</label>
-                    <input type="number" class="form-control form-control-sm" id="max_moyenne" name="max_moyenne" step="0.01" min="0" max="20" value="{{ $max_moyenne ?? '' }}" {{ ($filterType ?? '') != 'interval' ? 'disabled' : '' }}>
-                </div>
-                
-                <div class="filter-group" style="display: flex; gap: 5px;">
-                    <button type="submit" class="btn btn-sm btn-primary flex-grow-1">
-                        <i class="fas fa-search me-1"></i> Appliquer
-                    </button>
-                    <a href="{{ route('semestre1.dashboard') }}" class="btn btn-sm btn-outline-secondary">
-                        <i class="fas fa-undo"></i>
-                    </a>
-                    <button type="submit" name="export" value="1" class="btn btn-sm btn-success">
-                        <i class="fas fa-file-export"></i>
-                    </button>
+            
+            <form id="filterForm" action="{{ route('semestre1.dashboard') }}" method="GET">
+                <div class="row">
+                    <div class="col-md-2 mb-2">
+                        <label for="filter_type" class="form-label">Afficher</label>
+                        <select class="form-select form-select-sm" id="filter_type" name="filter_type">
+                            <option value="all" {{ ($filterType ?? 'all') == 'all' ? 'selected' : '' }}>Tous</option>
+                            <option value="niveau" {{ ($filterType ?? '') == 'niveau' ? 'selected' : '' }}>Par niveau</option>
+                            <option value="classe" {{ ($filterType ?? '') == 'classe' ? 'selected' : '' }}>Par classe</option>
+                            <option value="sexe" {{ ($filterType ?? '') == 'sexe' ? 'selected' : '' }}>Par sexe</option>
+                            <option value="interval" {{ ($filterType ?? '') == 'interval' ? 'selected' : '' }}>Par moyenne</option>
+                        </select>
+                    </div>
+                    
+                    <div class="col-md-2 mb-2 niveau-filter" style="{{ ($filterType ?? '') != 'niveau' && ($filterType ?? '') != 'classe' ? 'display:none' : '' }}">
+                        <label for="niveau_id" class="form-label">Niveau</label>
+                        <select class="form-select form-select-sm" id="niveau_id" name="niveau_id" {{ ($filterType ?? '') != 'niveau' && ($filterType ?? '') != 'classe' ? 'disabled' : '' }}>
+                            <option value="">Sélectionnez</option>
+                            @foreach($niveauxTous ?? [] as $niveau)
+                                <option value="{{ $niveau->id }}" {{ ($niveau_id ?? '') == $niveau->id ? 'selected' : '' }}>{{ $niveau->nom }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    
+                    <div class="col-md-2 mb-2 classe-filter" style="{{ ($filterType ?? '') != 'classe' ? 'display:none' : '' }}">
+                        <label for="classe_id" class="form-label">Classe</label>
+                        <select class="form-select form-select-sm" id="classe_id" name="classe_id" {{ ($filterType ?? '') != 'classe' ? 'disabled' : '' }}>
+                            <option value="">Sélectionnez</option>
+                            @foreach($classes ?? [] as $classe)
+                                <option value="{{ $classe->id }}" {{ ($classe_id ?? '') == $classe->id ? 'selected' : '' }}>{{ $classe->nom }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    
+                    <div class="col-md-2 mb-2 sexe-filter" style="{{ ($filterType ?? '') != 'sexe' ? 'display:none' : '' }}">
+                        <label for="sexe" class="form-label">Sexe</label>
+                        <select class="form-select form-select-sm" id="sexe" name="sexe" {{ ($filterType ?? '') != 'sexe' ? 'disabled' : '' }}>
+                            <option value="">Tous</option>
+                            <option value="F" {{ (request('sexe') ?? '') == 'F' ? 'selected' : '' }}>Filles</option>
+                            <option value="G" {{ (request('sexe') ?? '') == 'G' ? 'selected' : '' }}>Garçons</option>
+                        </select>
+                    </div>
+                    
+                    <div class="col-md-2 mb-2 interval-filter" style="{{ ($filterType ?? '') != 'interval' ? 'display:none' : '' }}">
+                        <label for="min_moyenne" class="form-label">Min</label>
+                        <input type="number" class="form-control form-control-sm" id="min_moyenne" name="min_moyenne" step="0.01" min="0" max="20" value="{{ $min_moyenne ?? '' }}" {{ ($filterType ?? '') != 'interval' ? 'disabled' : '' }}>
+                    </div>
+                    
+                    <div class="col-md-2 mb-2 interval-filter" style="{{ ($filterType ?? '') != 'interval' ? 'display:none' : '' }}">
+                        <label for="max_moyenne" class="form-label">Max</label>
+                        <input type="number" class="form-control form-control-sm" id="max_moyenne" name="max_moyenne" step="0.01" min="0" max="20" value="{{ $max_moyenne ?? '' }}" {{ ($filterType ?? '') != 'interval' ? 'disabled' : '' }}>
+                    </div>
+                    
+                    <div class="col-md-2 mb-2 d-flex align-items-end">
+                        <button type="submit" class="btn btn-sm btn-primary w-100">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </div>
                 </div>
             </form>
         </div>
-    </div>
-    <!-- Contenu principal -->
-    <div class="row g-3">
-        <!-- Première rangée -->
-        <div class="col-12">
-            <div class="row g-0">
-                <!-- Section Effectifs -->
-                <div class="col-md-4">
-                    <h5 class="stat-category">EFFECTIF</h5>
-                    <div class="stat-card">
-                        <div class="row">
-                            <div class="col-4">
-                                <div class="stat-label">TOTAL</div>
-                                <div class="stat-number">{{ $totalEleves ?? '0' }}</div>
-                            </div>
-                            <div class="col-4">
-                                <div class="stat-label">FILLES</div>
-                                <div class="stat-number">{{ $fillesCount ?? '0' }}</div>
-                            </div>
-                            <div class="col-4">
-                                <div class="stat-label">GARÇONS</div>
-                                <div class="stat-number">{{ $garconsCount ?? '0' }}</div>
-                            </div>
-                        </div>
-                        
-                        <div class="donut-container mt-3">
-                            <canvas id="genderDonut"></canvas>
-                        </div>
+        
+        <!-- Statistiques générales -->
+        <div class="row section">
+            <div class="col-lg-12">
+                <div class="section-header">
+                    <div class="icon-box">
+                        <i class="fas fa-chart-pie"></i>
+                    </div>
+                    <h2 class="section-title">Statistiques générales</h2>
+                </div>
+            </div>
+            
+            <!-- Effectifs totaux -->
+            <div class="col-md-3 mb-4">
+                <div class="stats-card">
+                    <div class="stats-header">
+                        <h3 class="stats-title">Effectif</h3>
+                    </div>
+                    <div class="stats-body">
+                        <div class="stats-value">{{ $totalEleves ?? '0' }}</div>
+                        <div class="stats-label">Élèves au total</div>
                         
                         <div class="gender-stats">
                             <div class="gender-stat">
-                                <div class="gender-label">GARÇONS</div>
-                                <div class="gender-percent text-primary">{{ $totalEleves ? round(($garconsCount / $totalEleves) * 100) : '0' }}%</div>
+                                <div class="gender-icon male-color">
+                                    <i class="fas fa-male"></i>
+                                </div>
+                                <div class="gender-value male-color">{{ $garconsCount ?? '0' }}</div>
+                                <div class="gender-label">Garçons</div>
                             </div>
+                            
                             <div class="gender-stat">
-                                <div class="gender-label">FILLES</div>
-                                <div class="gender-percent text-danger">{{ $totalEleves ? round(($fillesCount / $totalEleves) * 100) : '0' }}%</div>
+                                <div class="gender-icon female-color">
+                                    <i class="fas fa-female"></i>
+                                </div>
+                                <div class="gender-value female-color">{{ $fillesCount ?? '0' }}</div>
+                                <div class="gender-label">Filles</div>
                             </div>
                         </div>
                     </div>
-                </div>
-                
-                <!-- Section Moyenne >= 10 -->
-                <div class="col-md-4">
-                    <h5 class="stat-category">MOYENNE >=10</h5>
-                    <div class="stat-card">
+                    <div class="stats-footer text-center">
                         <div class="row">
-                            <div class="col-4">
-                                <div class="stat-label">TOTAL</div>
-                                <div class="stat-number">{{ $elevesAvecMoyenne ?? '0' }}</div>
+                            <div class="col-6 border-end">
+                                <span class="fw-bold male-color">{{ $totalEleves ? round(($garconsCount / $totalEleves) * 100) : '0' }}%</span> garçons
                             </div>
-                            <div class="col-4">
-                                <div class="stat-label">FILLES</div>
-                                <div class="stat-number">{{ $fillesAvecMoyenne ?? '0' }}</div>
-                            </div>
-                            <div class="col-4">
-                                <div class="stat-label">GARÇONS</div>
-                                <div class="stat-number">{{ $garconsAvecMoyenne ?? '0' }}</div>
-                            </div>
-                        </div>
-                        
-                        <div class="donut-container mt-3">
-                            <canvas id="successRateDonut"></canvas>
-                            <div class="donut-center">
-                                <div class="donut-percent">{{ $tauxReussite ?? '0' }}%</div>
-                                <div class="donut-label">TAUX</div>
-                            </div>
-                        </div>
-                        
-                        <div class="gender-stats">
-                            <div class="gender-stat">
-                                <div class="gender-label">% FILLES</div>
-                                <div class="gender-percent text-danger">
-                                    {{ $fillesCount ? round(($fillesAvecMoyenne / $fillesCount) * 100) : '0' }}%
-                                </div>
-                            </div>
-                            <div class="gender-stat">
-                                <div class="gender-label">% GARÇONS</div>
-                                <div class="gender-percent text-primary">
-                                    {{ $garconsCount ? round(($garconsAvecMoyenne / $garconsCount) * 100) : '0' }}%
-                                </div>
+                            <div class="col-6">
+                                <span class="fw-bold female-color">{{ $totalEleves ? round(($fillesCount / $totalEleves) * 100) : '0' }}%</span> filles
                             </div>
                         </div>
                     </div>
                 </div>
-                
-                <!-- Séparateur -->
-                <div class="separator">
-                    <span>TELECHARGER</span>
-                    <div class="mt-2">
-                        <i class="fas fa-arrow-down"></i>
+            </div>
+            
+            <!-- Réussite -->
+            <div class="col-md-3 mb-4">
+                <div class="stats-card">
+                    <div class="stats-header">
+                        <h3 class="stats-title">Réussite (≥ 10)</h3>
                     </div>
-                </div>
-                
-                <!-- Section Indicateurs de performances -->
-                <div class="col">
-                    <h5 class="stat-category">INDICATEURS DE PERFORMANCES</h5>
-                    <div class="stat-card">
-                        <div class="performance-box">
-                            <div class="performance-item">
-                                <div class="performance-label">NOTE MOYENNE</div>
-                                <div class="performance-value text-primary">{{ number_format(($noteMoyenne ?? 0), 2) }}</div>
+                    <div class="stats-body">
+                        <div class="stats-value text-success">{{ $elevesAvecMoyenne ?? '0' }}</div>
+                        <div class="stats-label">Élèves avec moyenne ≥ 10</div>
+                        
+                        <div class="progress">
+                            <div class="progress-bar bg-success" role="progressbar" style="width: {{ $tauxReussite ?? '0' }}%" aria-valuenow="{{ $tauxReussite ?? '0' }}" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                        <div class="stats-label mt-1">Taux de réussite: <strong>{{ $tauxReussite ?? '0' }}%</strong></div>
+                        
+                        <div class="metrics-grid">
+                            <div class="metric-item">
+                                <div class="metric-value text-success">{{ $fillesAvecMoyenne ?? '0' }}</div>
+                                <div class="metric-label">Filles</div>
                             </div>
-                            <div class="performance-item">
-                                <div class="performance-label">PLUS FORTE MOYENNE</div>
-                                <div class="performance-value text-success">{{ number_format(($plusForteMoyenne ?? 0), 2) }}</div>
+                            <div class="metric-item">
+                                <div class="metric-value text-primary">{{ $garconsAvecMoyenne ?? '0' }}</div>
+                                <div class="metric-label">Garçons</div>
                             </div>
-                            <div class="performance-item">
-                                <div class="performance-label">PLUS FAIBLE MOYENNE</div>
-                                <div class="performance-value text-danger">{{ number_format(($plusFaibleMoyenne ?? 0), 2) }}</div>
+                            <div class="metric-item">
+                                <div class="metric-value">{{ $tauxReussite ?? '0' }}%</div>
+                                <div class="metric-label">Taux</div>
                             </div>
                         </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Moyennes -->
+            <div class="col-md-3 mb-4">
+                <div class="stats-card">
+                    <div class="stats-header">
+                        <h3 class="stats-title">Moyennes</h3>
+                    </div>
+                    <div class="stats-body">
+                        <div class="stats-value text-primary">{{ number_format(($noteMoyenne ?? 0), 2) }}</div>
+                        <div class="stats-label">Moyenne générale</div>
                         
-                        <div class="performance-box pt-0">
-                            <div class="performance-item">
-                                <div class="performance-label">FÉLICITATIONS</div>
-                                <div class="performance-value text-dark">{{ $felicitations ?? '0' }}</div>
+                        <div class="metrics-grid">
+                            <div class="metric-item">
+                                <div class="metric-value text-success">{{ number_format(($plusForteMoyenne ?? 0), 2) }}</div>
+                                <div class="metric-label">Max</div>
                             </div>
-                            <div class="performance-item">
-                                <div class="performance-label">ENCOURAGEMENTS</div>
-                                <div class="performance-value text-dark">{{ $encouragements ?? '0' }}</div>
+                            <div class="metric-item">
+                                <div class="metric-value text-danger">{{ number_format(($plusFaibleMoyenne ?? 0), 2) }}</div>
+                                <div class="metric-label">Min</div>
                             </div>
-                            <div class="performance-item">
-                                <div class="performance-label">TABLEAU D'HONNEUR</div>
-                                <div class="performance-value text-dark">{{ $tableauHonneur ?? '0' }}</div>
+                            <div class="metric-item">
+                                <div class="metric-value text-warning">{{ number_format(($noteMoyenne ?? 0), 2) }}</div>
+                                <div class="metric-label">Moy</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Mentions -->
+            <div class="col-md-3 mb-4">
+                <div class="stats-card">
+                    <div class="stats-header">
+                        <h3 class="stats-title">Mentions</h3>
+                    </div>
+                    <div class="stats-body">
+                        <div class="stats-value text-warning">{{ ($felicitations ?? 0) + ($encouragements ?? 0) + ($tableauHonneur ?? 0) }}</div>
+                        <div class="stats-label">Élèves avec mention</div>
+                        
+                        <div class="metrics-grid">
+                            <div class="metric-item">
+                                <div class="metric-value text-danger">{{ $felicitations ?? '0' }}</div>
+                                <div class="metric-label">Félicitations</div>
+                            </div>
+                            <div class="metric-item">
+                                <div class="metric-value text-warning">{{ $encouragements ?? '0' }}</div>
+                                <div class="metric-label">Encouragements</div>
+                            </div>
+                            <div class="metric-item">
+                                <div class="metric-value text-info">{{ $tableauHonneur ?? '0' }}</div>
+                                <div class="metric-label">Tab. d'honneur</div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-        <!-- Deuxième rangée -->
-        <div class="col-12">
-            <div class="row g-0">
-                <!-- Moyennes par niveau -->
-                <div class="col-md-6">
-                    <h5 class="stat-category">MOYENNES GÉNÉRALES PAR NIVEAU</h5>
-                    <div class="chart-container">
-                        <canvas id="niveauxChart"></canvas>
+        
+        <!-- Graphiques de performance -->
+        <div class="row section">
+            <!-- Graphique des moyennes par niveau -->
+            <div class="col-lg-6 mb-4">
+                <div class="stats-card">
+                    <div class="stats-header">
+                        <h3 class="stats-title">Moyenne par niveau</h3>
+                    </div>
+                    <div class="stats-body">
+                        <div class="chart-container">
+                            <canvas id="niveauxMoyenneChart"></canvas>
+                        </div>
                     </div>
                 </div>
-                
-                <!-- Observations -->
-                <div class="col-md-6">
-                    <div class="row g-0">
-                        <div class="col-12">
-                            <h5 class="stat-category">OBSERVATIONS</h5>
-                            <div class="observations-grid">
-                                <div class="observations-item">
-                                    <div class="observations-label">MIEUX FAIRE</div>
-                                    <div class="observations-value">{{ $mieuxFaire ?? '0' }}</div>
-                                </div>
-                                <div class="observations-item">
-                                    <div class="observations-label">DOIT CONTINUER</div>
-                                    <div class="observations-value">{{ $doitContinuer ?? '0' }}</div>
-                                </div>
-                                <div class="observations-item">
-                                    <div class="observations-label">RISQUE DE REDOUBLER</div>
-                                    <div class="observations-value">{{ $risqueRedoubler ?? '0' }}</div>
+            </div>
+            
+            <!-- Graphique du taux de réussite par niveau -->
+            <div class="col-lg-6 mb-4">
+                <div class="stats-card">
+                    <div class="stats-header">
+                        <h3 class="stats-title">Taux de réussite par niveau</h3>
+                    </div>
+                    <div class="stats-body">
+                        <div class="chart-container">
+                            <canvas id="niveauxReussiteChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Performance des élèves -->
+        <div class="row section">
+            <div class="col-lg-12">
+                <div class="section-header">
+                    <div class="icon-box">
+                        <i class="fas fa-user-graduate"></i>
+                    </div>
+                    <h2 class="section-title">Performance des élèves</h2>
+                </div>
+            </div>
+            
+            <!-- Indicateurs de performance -->
+            <div class="col-md-6 mb-4">
+                <div class="stats-card">
+                    <div class="stats-header">
+                        <h3 class="stats-title">Indicateurs de performance</h3>
+                    </div>
+                    <div class="stats-body">
+                        <div class="performance-indicator">
+                            <div class="indicator-value text-primary">{{ number_format(($noteMoyenne ?? 0), 2) }}</div>
+                            <div class="indicator-details">
+                                <div class="indicator-label">Moyenne générale</div>
+                                <div class="indicator-bar">
+                                    <div class="indicator-fill bg-primary" style="width: {{ min(100, ($noteMoyenne ?? 0) * 5) }}%"></div>
                                 </div>
                             </div>
                         </div>
                         
-                        <div class="col-12 mt-3">
-                            <h5 class="stat-category">RETARDS ET ABSENCES DU SEMESTRE 1</h5>
-                            <div class="chart-container" style="height: 170px;">
-                                <canvas id="absencesChart"></canvas>
+                        <div class="performance-indicator">
+                            <div class="indicator-value text-success">{{ number_format(($plusForteMoyenne ?? 0), 2) }}</div>
+                            <div class="indicator-details">
+                                <div class="indicator-label">Plus forte moyenne</div>
+                                <div class="indicator-bar">
+                                    <div class="indicator-fill bg-success" style="width: {{ min(100, ($plusForteMoyenne ?? 0) * 5) }}%"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="performance-indicator">
+                            <div class="indicator-value text-danger">{{ number_format(($plusFaibleMoyenne ?? 0), 2) }}</div>
+                            <div class="indicator-details">
+                                <div class="indicator-label">Plus faible moyenne</div>
+                                <div class="indicator-bar">
+                                    <div class="indicator-fill bg-danger" style="width: {{ min(100, ($plusFaibleMoyenne ?? 0) * 5) }}%"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="performance-indicator">
+                            <div class="indicator-value text-warning">{{ $tauxReussite ?? 0 }}%</div>
+                            <div class="indicator-details">
+                                <div class="indicator-label">Taux de réussite</div>
+                                <div class="indicator-bar">
+                                    <div class="indicator-fill bg-warning" style="width: {{ $tauxReussite ?? 0 }}%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Distribution des notes -->
+            <div class="col-md-6 mb-4">
+                <div class="stats-card">
+                    <div class="stats-header">
+                        <h3 class="stats-title">Distribution des notes</h3>
+                    </div>
+                    <div class="stats-body">
+                        <div class="chart-container">
+                            <canvas id="distributionChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="stats-footer text-center">
+                        <div class="row">
+                            <div class="col-3">
+                                <small class="d-block fw-bold text-success">{{ $performanceStats['excellent'] ?? 0 }}%</small>
+                                <small>Excellent<br>(≥ 16)</small>
+                            </div>
+                            <div class="col-3">
+                                <small class="d-block fw-bold text-info">{{ $performanceStats['good'] ?? 0 }}%</small>
+                                <small>Bien<br>(14-16)</small>
+                            </div>
+                            <div class="col-3">
+                                <small class="d-block fw-bold text-warning">{{ $performanceStats['average'] ?? 0 }}%</small>
+                                <small>Moyen<br>(10-14)</small>
+                            </div>
+                            <div class="col-3">
+                                <small class="d-block fw-bold text-danger">{{ $performanceStats['poor'] ?? 0 }}%</small>
+                                <small>Insuffisant<br>(< 10)</small>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-        <!-- Troisième rangée - Tableau des niveaux -->
-        <div class="col-12">
-            <h5 class="stat-category">STATISTIQUES PAR NIVEAU</h5>
-            <div class="data-table-container">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th width="20%">NIVEAU</th>
-                            <th width="10%">EFFECTIF</th>
-                            <th width="12%">MOYENNE</th>
-                            <th width="18%">TAUX RÉUSSITE</th>
-                            <th width="10%">FÉLICITATIONS</th>
-                            <th width="10%">ENCOURAGEMENTS</th>
-                            <th width="10%">TABLEAU D'HONNEUR</th>
-                            <th width="10%">RISQUE D'ÉCHEC</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach($statsNiveaux ?? [] as $niveau)
-                        <tr>
-                            <td><strong>{{ $niveau['code'] }}</strong> - {{ $niveau['nom'] }}</td>
-                            <td>{{ $niveau['effectif'] }}</td>
-                            <td><strong class="{{ floatval($niveau['moyenne']) >= 10 ? 'text-success' : 'text-danger' }}">{{ $niveau['moyenne'] }}</strong></td>
-                            <td>
-                                <div class="progress" style="height: 6px; margin-top: 5px;">
-                                    <div class="progress-bar {{ $niveau['taux_reussite'] >= 70 ? 'bg-success' : ($niveau['taux_reussite'] >= 50 ? 'bg-warning' : 'bg-danger') }}" style="width: {{ $niveau['taux_reussite'] }}%"></div>
-                                </div>
-                                <span class="small">{{ $niveau['taux_reussite'] }}%</span>
-                            </td>
-                            <td>{{ $niveau['felicitations'] }}</td>
-                            <td>{{ $niveau['encouragements'] }}</td>
-                            <td>{{ $niveau['tableau_honneur'] }}</td>
-                            <td>{{ $niveau['effectif'] - ($niveau['felicitations'] + $niveau['encouragements'] + $niveau['tableau_honneur']) }}</td>
-                        </tr>
-                        @endforeach
-                    </tbody>
-                </table>
+        
+        <!-- Observations et décisions du conseil -->
+        <div class="row section">
+            <div class="col-lg-12">
+                <div class="section-header">
+                    <div class="icon-box">
+                        <i class="fas fa-comments"></i>
+                    </div>
+                    <h2 class="section-title">Observations et décisions du conseil</h2>
+                </div>
+            </div>
+            
+            <div class="col-md-4 mb-4">
+                <div class="observation-card">
+                    <div class="observation-icon" style="background-color: #28a745;">
+                        <i class="fas fa-trophy"></i>
+                    </div>
+                    <div class="observation-details">
+                        <div class="observation-title">Félicitations</div>
+                        <div class="observation-value">{{ $felicitations ?? 0 }}</div>
+                        <div class="observation-footer">
+                            {{ $totalEleves > 0 ? round(($felicitations / $totalEleves) * 100) : 0 }}% des élèves
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4 mb-4">
+                <div class="observation-card">
+                    <div class="observation-icon" style="background-color: #17a2b8;">
+                        <i class="fas fa-thumbs-up"></i>
+                    </div>
+                    <div class="observation-details">
+                        <div class="observation-title">Encouragements</div>
+                        <div class="observation-value">{{ $encouragements ?? 0 }}</div>
+                        <div class="observation-footer">
+                            {{ $totalEleves > 0 ? round(($encouragements / $totalEleves) * 100) : 0 }}% des élèves
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4 mb-4">
+                <div class="observation-card">
+                    <div class="observation-icon" style="background-color: #ffc107;">
+                        <i class="fas fa-award"></i>
+                    </div>
+                    <div class="observation-details">
+                        <div class="observation-title">Tableau d'honneur</div>
+                        <div class="observation-value">{{ $tableauHonneur ?? 0 }}</div>
+                        <div class="observation-footer">
+                            {{ $totalEleves > 0 ? round(($tableauHonneur / $totalEleves) * 100) : 0 }}% des élèves
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4 mb-4">
+                <div class="observation-card">
+                    <div class="observation-icon" style="background-color: #ff9800;">
+                        <i class="fas fa-exclamation-circle"></i>
+                    </div>
+                    <div class="observation-details">
+                        <div class="observation-title">Peut mieux faire</div>
+                        <div class="observation-value">{{ $mieuxFaire ?? 0 }}</div>
+                        <div class="observation-footer">
+                            {{ $totalEleves > 0 ? round(($mieuxFaire / $totalEleves) * 100) : 0 }}% des élèves
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4 mb-4">
+                <div class="observation-card">
+                    <div class="observation-icon" style="background-color: #6c757d;">
+                        <i class="fas fa-arrows-alt-v"></i>
+                    </div>
+                    <div class="observation-details">
+                        <div class="observation-title">Doit continuer</div>
+                        <div class="observation-value">{{ $doitContinuer ?? 0 }}</div>
+                        <div class="observation-footer">
+                            {{ $totalEleves > 0 ? round(($doitContinuer / $totalEleves) * 100) : 0 }}% des élèves
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4 mb-4">
+                <div class="observation-card">
+                    <div class="observation-icon" style="background-color: #dc3545;">
+                        <i class="fas fa-times-circle"></i>
+                    </div>
+                    <div class="observation-details">
+                        <div class="observation-title">Risque de redoublement</div>
+                        <div class="observation-value">{{ $risqueRedoubler ?? 0 }}</div>
+                        <div class="observation-footer">
+                            {{ $totalEleves > 0 ? round(($risqueRedoubler / $totalEleves) * 100) : 0 }}% des élèves
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Tableau des statistiques par niveau -->
+        <div class="row section">
+            <div class="col-lg-12">
+                <div class="section-header">
+                    <div class="icon-box">
+                        <i class="fas fa-table"></i>
+                    </div>
+                    <h2 class="section-title">Statistiques détaillées par niveau</h2>
+                </div>
+                
+                <div class="stats-card">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-stats">
+                            <thead>
+                                <tr>
+                                    <th>Niveau</th>
+                                    <th class="text-center">Effectif</th>
+                                    <th class="text-center">Moyenne générale</th>
+                                    <th class="text-center">Taux de réussite</th>
+                                    <th class="text-center">Félicitations</th>
+                                    <th class="text-center">Encouragements</th>
+                                    <th class="text-center">Tableau d'honneur</th>
+                                    <th class="text-center">Risque d'échec</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($statsNiveaux ?? [] as $niveau)
+                                <tr>
+                                    <td>
+                                        <strong>{{ $niveau['code'] }}</strong> - {{ $niveau['nom'] }}
+                                    </td>
+                                    <td class="text-center">{{ $niveau['effectif'] }}</td>
+                                    <td class="text-center">
+                                        <span class="badge {{ floatval($niveau['moyenne']) >= 10 ? 'bg-success' : 'bg-danger' }}">
+                                            {{ $niveau['moyenne'] }}
+                                        </span>
+                                    </td>
+                                    <td class="text-center">
+                                        <div class="progress" style="height: 5px;">
+                                            <div class="progress-bar {{ $niveau['taux_reussite'] >= 70 ? 'bg-success' : ($niveau['taux_reussite'] >= 50 ? 'bg-warning' : 'bg-danger') }}" 
+                                                 style="width: {{ $niveau['taux_reussite'] }}%" 
+                                                 title="{{ $niveau['taux_reussite'] }}%">
+                                            </div>
+                                        </div>
+                                        <small>{{ $niveau['taux_reussite'] }}%</small>
+                                    </td>
+                                    <td class="text-center">{{ $niveau['felicitations'] }}</td>
+                                    <td class="text-center">{{ $niveau['encouragements'] }}</td>
+                                    <td class="text-center">{{ $niveau['tableau_honneur'] }}</td>
+                                    <td class="text-center">
+                                        {{ $niveau['effectif'] - ($niveau['felicitations'] + $niveau['encouragements'] + $niveau['tableau_honneur']) }}
+                                    </td>
+                                </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Retards et absences -->
+        <div class="row section">
+            <div class="col-lg-12">
+                <div class="section-header">
+                    <div class="icon-box">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                    <h2 class="section-title">Retards et absences</h2>
+                </div>
+                
+                <div class="stats-card">
+                    <div class="stats-body">
+                        <div class="chart-container">
+                            <canvas id="absencesChart"></canvas>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
+</div>
+
+<!-- Bouton d'exportation flottant -->
+<a href="{{ route('semestre1.dashboard', ['export' => 'pdf'] + request()->query()) }}" class="export-button" title="Exporter en PDF">
+    <i class="fas fa-file-export"></i>
+</a>
 @endsection
+
 @section('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -673,24 +957,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const minMoyenneInput = document.getElementById('min_moyenne');
     const maxMoyenneInput = document.getElementById('max_moyenne');
     
-    // Initialiser l'état des filtres au chargement de la page
-    if (filterType.value === 'niveau' || filterType.value === 'classe') {
-        niveauFilter.forEach(el => el.style.display = 'block');
-        niveauSelect.disabled = false;
-        
-        if (filterType.value === 'classe') {
-            classeFilter.forEach(el => el.style.display = 'block');
-            classeSelect.disabled = false;
-        }
-    } else if (filterType.value === 'sexe') {
-        sexeFilter.forEach(el => el.style.display = 'block');
-        sexeSelect.disabled = false;
-    } else if (filterType.value === 'interval') {
-        intervalFilter.forEach(el => el.style.display = 'block');
-        minMoyenneInput.disabled = false;
-        maxMoyenneInput.disabled = false;
-    }
-    
+    // Gérer le changement du type de filtre
     filterType.addEventListener('change', function() {
         // Réinitialiser tous les filtres
         niveauFilter.forEach(el => el.style.display = 'none');
@@ -702,9 +969,8 @@ document.addEventListener('DOMContentLoaded', function() {
         classeSelect.disabled = true;
         sexeSelect.disabled = true;
         minMoyenneInput.disabled = true;
-        maxMoyenneInput.disabled = false;
+        maxMoyenneInput.disabled = true;
         
-        // Activer les filtres nécessaires
         // Activer les filtres nécessaires
         if (this.value === 'niveau' || this.value === 'classe') {
             niveauFilter.forEach(el => el.style.display = 'block');
@@ -724,247 +990,27 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Préparation des données pour les graphiques
-    const statsNiveauxCodes = @json(array_column($statsNiveaux ?? [], 'code') ?? []);
-    const statsNiveauxMoyennes = @json(array_map(function($n) { return floatval($n['moyenne']); }, $statsNiveaux ?? []) ?? []);
-    const statsNiveauxTauxReussite = @json(array_column($statsNiveaux ?? [], 'taux_reussite') ?? []);
-    
-    const fillesCount = {{ $fillesCount ?? 0 }};
-    const garconsCount = {{ $garconsCount ?? 0 }};
-    
-    const fillesAvecMoyenne = {{ $fillesAvecMoyenne ?? 0 }};
-    const garconsAvecMoyenne = {{ $garconsAvecMoyenne ?? 0 }};
-    
-    const tauxReussite = {{ $tauxReussite ?? 0 }};
-    
-    const classesData = @json($classesData ?? []);
-    const retardsData = @json($retardsData ?? []);
-    const absencesData = @json($absencesData ?? []);
-    
-    // Donut Chart pour la répartition par sexe
-    const genderCtx = document.getElementById('genderDonut').getContext('2d');
-    new Chart(genderCtx, {
-        type: 'doughnut',
-        data: {
-            labels: ['Filles', 'Garçons'],
-            datasets: [{
-                data: [fillesCount, garconsCount],
-                backgroundColor: ['#e83e8c', '#007bff'],
-                borderWidth: 0,
-                hoverOffset: 4
-            }]
-        },
-        options: {
-            cutout: '70%',
-            plugins: {
-                legend: {
-                    display: false
-                },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            const value = context.raw;
-                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                            const percentage = Math.round((value / total) * 100);
-                            return `${context.label}: ${value} (${percentage}%)`;
-                        }
-                    }
-                }
-            },
-            responsive: true,
-            maintainAspectRatio: false
-        }
-    });
-    
-    // Donut Chart pour le taux de réussite
-    const successRateCtx = document.getElementById('successRateDonut').getContext('2d');
-    new Chart(successRateCtx, {
-        type: 'doughnut',
-        data: {
-            labels: ['Réussite', 'Échec'],
-            datasets: [{
-                data: [tauxReussite, 100 - tauxReussite],
-                backgroundColor: ['#f39c12', '#e0e0e0'],
-                borderWidth: 0,
-                hoverOffset: 4
-            }]
-        },
-        options: {
-            cutout: '70%',
-            plugins: {
-                legend: {
-                    display: false
-                },
-                tooltip: {
-                    enabled: false
-                }
-            },
-            responsive: true,
-            maintainAspectRatio: false
-        }
-    });
-    
-    // Graphique des moyennes par niveau
-    const niveauxCtx = document.getElementById('niveauxChart').getContext('2d');
-    new Chart(niveauxCtx, {
-        type: 'line',
-        data: {
-            labels: statsNiveauxCodes,
-            datasets: [{
-                label: 'Moyenne',
-                data: statsNiveauxMoyennes,
-                backgroundColor: 'rgba(0, 166, 124, 0.2)',
-                borderColor: '#00a67c',
-                borderWidth: 2,
-                tension: 0.4,
-                fill: true,
-                pointBackgroundColor: '#00a67c',
-                pointRadius: 6,
-                pointHoverRadius: 8
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                y: {
-                    beginAtZero: false,
-                    min: Math.max(0, Math.min(...statsNiveauxMoyennes) - 2),
-                    max: Math.max(...statsNiveauxMoyennes) + 2,
-                    ticks: {
-                        font: {
-                            weight: 'bold'
-                        }
-                    },
-                    grid: {
-                        color: 'rgba(0, 0, 0, 0.05)'
-                    }
-                },
-                x: {
-                    grid: {
-                        display: false
-                    },
-                    ticks: {
-                        font: {
-                            weight: 'bold'
-                        }
-                    }
-                }
-            },
-            plugins: {
-                legend: {
-                    display: false
-                },
-                tooltip: {
-                    backgroundColor: '#004d40',
-                    titleFont: {
-                        size: 16,
-                        weight: 'bold'
-                    },
-                    bodyFont: {
-                        size: 14
-                    },
-                    padding: 12,
-                    displayColors: false,
-                    callbacks: {
-                        title: function(tooltipItems) {
-                            return 'NIVEAU ' + tooltipItems[0].label;
-                        },
-                        label: function(context) {
-                            return 'Moyenne: ' + context.parsed.y.toFixed(2);
-                        }
-                    }
-                }
-            }
-        }
-    });
-    
-    // Graphique des absences et retards
-    const absencesCtx = document.getElementById('absencesChart').getContext('2d');
-    new Chart(absencesCtx, {
-        type: 'bar',
-        data: {
-            labels: classesData,
-            datasets: [{
-                label: 'Retards',
-                data: retardsData,
-                backgroundColor: '#4caf50',
-                borderColor: '#388e3c',
-                borderWidth: 1,
-                borderRadius: 4,
-                barPercentage: 0.6,
-                categoryPercentage: 0.7
-            }, {
-                label: 'Absences',
-                data: absencesData,
-                backgroundColor: '#f44336',
-                borderColor: '#d32f2f',
-                borderWidth: 1,
-                borderRadius: 4,
-                barPercentage: 0.6,
-                categoryPercentage: 0.7
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'top',
-                    labels: {
-                        boxWidth: 12,
-                        font: {
-                            size: 10,
-                            weight: 'bold'
-                        }
-                    }
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    grid: {
-                        color: 'rgba(0, 0, 0, 0.05)'
-                    },
-                    ticks: {
-                        font: {
-                            size: 9
-                        }
-                    }
-                },
-                x: {
-                    grid: {
-                        display: false
-                    },
-                    ticks: {
-                        font: {
-                            size: 8
-                        },
-                        maxRotation: 45,
-                        minRotation: 45
-                    }
-                }
-            }
-        }
-    });
-    
-    // Ajout d'event listeners pour charger les classes lorsqu'un niveau est sélectionné
-    document.getElementById('niveau_id').addEventListener('change', function() {
+    // Gérer le chargement des classes lors du changement de niveau
+    niveauSelect.addEventListener('change', function() {
         const niveauId = this.value;
-        const classeSelect = document.getElementById('classe_id');
-        const filterType = document.getElementById('filter_type').value;
         
-        // Réinitialiser le select des classes
-        classeSelect.innerHTML = '<option value="">Sélectionner une classe</option>';
+        // Réinitialiser le sélecteur de classe
+        classeSelect.innerHTML = '<option value="">Sélectionnez</option>';
         
-        if (niveauId && (filterType === 'classe')) {
-            // Activer le select des classes
-            classeSelect.disabled = false;
+        if (niveauId && filterType.value === 'classe') {
+            classeSelect.disabled = true; // Désactiver pendant le chargement
             
-            // Récupérer les classes du niveau via AJAX
+            // Afficher un indicateur de chargement
+            classeSelect.innerHTML = '<option value="">Chargement...</option>';
+            
+            // Appel AJAX pour charger les classes du niveau
             fetch(`/semestre1/classes-by-niveau/${niveauId}`)
                 .then(response => response.json())
                 .then(data => {
+                    // Réinitialiser le sélecteur
+                    classeSelect.innerHTML = '<option value="">Sélectionnez</option>';
+                    
+                    // Ajouter les classes
                     data.forEach(classe => {
                         const option = document.createElement('option');
                         option.value = classe.id;
@@ -972,18 +1018,264 @@ document.addEventListener('DOMContentLoaded', function() {
                         classeSelect.appendChild(option);
                     });
                     
-                    // Si une classe était précédemment sélectionnée, tenter de la restaurer
+                    // Réactiver le sélecteur
+                    classeSelect.disabled = false;
+                    
+                    // Si une classe était précédemment sélectionnée, essayer de la restaurer
                     const previousClasseId = "{{ $classe_id ?? '' }}";
                     if (previousClasseId) {
                         const option = classeSelect.querySelector(`option[value="${previousClasseId}"]`);
                         if (option) option.selected = true;
                     }
                 })
-                .catch(error => console.error('Erreur lors du chargement des classes:', error));
+                .catch(error => {
+                    console.error('Erreur lors du chargement des classes:', error);
+                    classeSelect.innerHTML = '<option value="">Erreur de chargement</option>';
+                    classeSelect.disabled = true;
+                });
         } else {
             classeSelect.disabled = true;
         }
     });
+    
+    // Bouton d'actualisation
+    document.getElementById('refreshBtn')?.addEventListener('click', function() {
+        location.reload();
+    });
+    
+    // Données pour les graphiques
+    const statsNiveauxCodes = @json(array_column($statsNiveaux ?? [], 'code') ?? []);
+    const statsNiveauxMoyennes = @json(array_map(function($n) { return floatval($n['moyenne']); }, $statsNiveaux ?? []) ?? []);
+    const statsNiveauxTauxReussite = @json(array_column($statsNiveaux ?? [], 'taux_reussite') ?? []);
+    const classesData = @json($classesData ?? []);
+    const retardsData = @json($retardsData ?? []);
+    const absencesData = @json($absencesData ?? []);
+    
+    // Configuration des couleurs
+    const primaryColor = '#0062cc';
+    const secondaryColor = '#6c757d';
+    const successColor = '#28a745';
+    const dangerColor = '#dc3545';
+    const warningColor = '#ffc107';
+    const infoColor = '#17a2b8';
+    
+    // Graphique des moyennes par niveau
+    if (document.getElementById('niveauxMoyenneChart')) {
+        const niveauxMoyenneCtx = document.getElementById('niveauxMoyenneChart').getContext('2d');
+        new Chart(niveauxMoyenneCtx, {
+            type: 'bar',
+            data: {
+                labels: statsNiveauxCodes,
+                datasets: [{
+                    label: 'Moyenne générale',
+                    data: statsNiveauxMoyennes,
+                    backgroundColor: statsNiveauxMoyennes.map(val => val >= 10 ? successColor : dangerColor),
+                    borderColor: statsNiveauxMoyennes.map(val => val >= 10 ? successColor : dangerColor),
+                    borderWidth: 1,
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return `Moyenne: ${context.parsed.y.toFixed(2)}`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: false,
+                        min: Math.max(0, Math.min(...statsNiveauxMoyennes) - 1),
+                        max: Math.max(...statsNiveauxMoyennes) + 1,
+                        ticks: {
+                            callback: function(value) {
+                                return value.toFixed(1);
+                            }
+                        },
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.05)'
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false
+                        }
+                    }
+                }
+            }
+        });
+    }
+    
+    // Graphique du taux de réussite par niveau
+    if (document.getElementById('niveauxReussiteChart')) {
+        const niveauxReussiteCtx = document.getElementById('niveauxReussiteChart').getContext('2d');
+        new Chart(niveauxReussiteCtx, {
+            type: 'bar',
+            data: {
+                labels: statsNiveauxCodes,
+                datasets: [{
+                    label: 'Taux de réussite',
+                    data: statsNiveauxTauxReussite,
+                    backgroundColor: statsNiveauxTauxReussite.map(val => 
+                        val >= 70 ? successColor : (val >= 50 ? warningColor : dangerColor)
+                    ),
+                    borderColor: statsNiveauxTauxReussite.map(val => 
+                        val >= 70 ? successColor : (val >= 50 ? warningColor : dangerColor)
+                    ),
+                    borderWidth: 1,
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return `Taux de réussite: ${context.parsed.y}%`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: {
+                            callback: function(value) {
+                                return `${value}%`;
+                            }
+                        },
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.05)'
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false
+                        }
+                    }
+                }
+            }
+        });
+    }
+    
+    // Graphique de distribution des notes
+    if (document.getElementById('distributionChart')) {
+        const distributionCtx = document.getElementById('distributionChart').getContext('2d');
+        new Chart(distributionCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Excellent (≥16)', 'Bien (14-16)', 'Moyen (10-14)', 'Insuffisant (<10)'],
+                datasets: [{
+                    data: [
+                        {{ $performanceStats['excellent'] ?? 0 }},
+                        {{ $performanceStats['good'] ?? 0 }},
+                        {{ $performanceStats['average'] ?? 0 }},
+                        {{ $performanceStats['poor'] ?? 0 }}
+                    ],
+                    backgroundColor: [successColor, infoColor, warningColor, dangerColor],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            boxWidth: 12,
+                            padding: 15
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return `${context.label}: ${context.parsed}%`;
+                            }
+                        }
+                    }
+                },
+                cutout: '60%'
+            }
+        });
+    }
+    
+    // Graphique des retards et absences
+    if (document.getElementById('absencesChart')) {
+        const absencesCtx = document.getElementById('absencesChart').getContext('2d');
+        new Chart(absencesCtx, {
+            type: 'bar',
+            data: {
+                labels: classesData,
+                datasets: [
+                    {
+                        label: 'Retards',
+                        data: retardsData,
+                        backgroundColor: infoColor,
+                        borderColor: infoColor,
+                        borderWidth: 1,
+                        borderRadius: 4,
+                        barPercentage: 0.7,
+                        categoryPercentage: 0.7
+                    },
+                    {
+                        label: 'Absences',
+                        data: absencesData,
+                        backgroundColor: dangerColor,
+                        borderColor: dangerColor,
+                        borderWidth: 1,
+                        borderRadius: 4,
+                        barPercentage: 0.7,
+                        categoryPercentage: 0.7
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'top'
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Nombre'
+                        },
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.05)'
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false
+                        }
+                    }
+                }
+            }
+        });
+    }
 });
 </script>
 @endsection
