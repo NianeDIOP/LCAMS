@@ -155,12 +155,15 @@ public function index()
 /**
  * Affiche le tableau de bord du semestre 1
  */
+/**
+ * Affiche le tableau de bord du semestre 1 avec données filtrées
+ */
 public function dashboard(Request $request)
 {
     // 1. Récupération des paramètres de filtrage
-    $filterType = $request->input('filter_type', 'all');
     $niveau_id = $request->input('niveau_id');
     $classe_id = $request->input('classe_id');
+    $sexe = $request->input('sexe');
     $min_moyenne = $request->input('min_moyenne');
     $max_moyenne = $request->input('max_moyenne');
 
@@ -178,25 +181,31 @@ public function dashboard(Request $request)
         ->where('imported_files.semestre', 1);
 
     // 5. Application des filtres
-    if ($filterType == 'niveau' && $niveau_id) {
+    if ($niveau_id) {
         $query->where('imported_files.niveau_id', $niveau_id);
     }
 
-    if ($filterType == 'classe' && $classe_id) {
+    if ($classe_id) {
         $query->where('imported_files.classe_id', $classe_id);
     }
 
-    if ($filterType == 'interval') {
-        if ($min_moyenne !== null) {
-            $query->whereRaw('CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2)) >= ?', [$min_moyenne]);
-        }
-
-        if ($max_moyenne !== null) {
-            $query->whereRaw('CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2)) <= ?', [$max_moyenne]);
+    if ($sexe) {
+        if ($sexe == 'F') {
+            $query->whereRaw('JSON_EXTRACT(data, "$[3]") IN ("F", "f")');
+        } else if ($sexe == 'G') {
+            $query->whereRaw('JSON_EXTRACT(data, "$[3]") IN ("H", "h", "M", "m", "G", "g")');
         }
     }
 
-    // 6. Calcul des statistiques élèves
+    if ($min_moyenne !== null) {
+        $query->whereRaw('CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2)) >= ?', [$min_moyenne]);
+    }
+
+    if ($max_moyenne !== null) {
+        $query->whereRaw('CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2)) <= ?', [$max_moyenne]);
+    }
+
+    // 6. Calcul des statistiques élèves basées sur les filtres appliqués
     $totalEleves = $query->clone()->distinct()->count(DB::raw('JSON_EXTRACT(data, "$[0]")'));
     
     $fillesCount = $query->clone()
@@ -205,7 +214,7 @@ public function dashboard(Request $request)
         ->count(DB::raw('JSON_EXTRACT(data, "$[0]")'));
     
     $garconsCount = $query->clone()
-        ->whereRaw('JSON_EXTRACT(data, "$[3]") IN ("H", "h", "M", "m")')
+        ->whereRaw('JSON_EXTRACT(data, "$[3]") IN ("H", "h", "M", "m", "G", "g")')
         ->distinct()
         ->count(DB::raw('JSON_EXTRACT(data, "$[0]")'));
 
@@ -224,7 +233,7 @@ public function dashboard(Request $request)
     
     // Elèves garçons avec moyenne >= 10
     $garconsAvecMoyenne = $query->clone()
-        ->whereRaw('JSON_EXTRACT(data, "$[3]") IN ("H", "h", "M", "m")')
+        ->whereRaw('JSON_EXTRACT(data, "$[3]") IN ("H", "h", "M", "m", "G", "g")')
         ->whereRaw('CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2)) >= 10')
         ->distinct()
         ->count(DB::raw('JSON_EXTRACT(data, "$[0]")'));
@@ -234,22 +243,25 @@ public function dashboard(Request $request)
         : 0;
 
     // Moyennes
-    $noteMoyenne = $query->clone()
+    $noteMoyenneResult = $query->clone()
         ->whereRaw('JSON_EXTRACT(data, "$[9]") IS NOT NULL')
         ->select(DB::raw('AVG(CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2))) as moyenne'))
-        ->first()->moyenne ?? 0;
+        ->first();
+    $noteMoyenne = $noteMoyenneResult ? $noteMoyenneResult->moyenne : 0;
     
     // Meilleure moyenne
-    $plusForteMoyenne = $query->clone()
+    $plusForteMoyenneResult = $query->clone()
         ->whereRaw('JSON_EXTRACT(data, "$[9]") IS NOT NULL')
         ->select(DB::raw('MAX(CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2))) as max_moyenne'))
-        ->first()->max_moyenne ?? 0;
+        ->first();
+    $plusForteMoyenne = $plusForteMoyenneResult ? $plusForteMoyenneResult->max_moyenne : 0;
     
     // Plus faible moyenne
-    $plusFaibleMoyenne = $query->clone()
+    $plusFaibleMoyenneResult = $query->clone()
         ->whereRaw('JSON_EXTRACT(data, "$[9]") IS NOT NULL')
         ->select(DB::raw('MIN(CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2))) as min_moyenne'))
-        ->first()->min_moyenne ?? 0;
+        ->first();
+    $plusFaibleMoyenne = $plusFaibleMoyenneResult ? $plusFaibleMoyenneResult->min_moyenne : 0;
     
     // Mentions
     $felicitations = $query->clone()
@@ -283,38 +295,63 @@ public function dashboard(Request $request)
         ->distinct()
         ->count(DB::raw('JSON_EXTRACT(data, "$[0]")'));
         
-    // 7. Statistiques détaillées par niveau
-    $niveaux = DB::table('imported_files as f')
+    // 7. Statistiques détaillées par niveau (adaptées aux filtres aussi)
+    $niveauxQuery = DB::table('imported_files as f')
         ->join('niveaux as n', 'f.niveau_id', '=', 'n.id')
-        ->where('f.semestre', 1)
-        ->select('n.id', 'n.nom', 'n.code')
+        ->where('f.semestre', 1);
+        
+    // Appliquer les filtres de niveau si spécifiés
+    if ($niveau_id) {
+        $niveauxQuery->where('f.niveau_id', $niveau_id);
+    }
+    
+    $niveaux = $niveauxQuery->select('n.id', 'n.nom', 'n.code')
         ->distinct()
         ->get();
 
     $statsNiveaux = [];
     foreach ($niveaux as $niveau) {
-        // Calcul de l'effectif
-        $effectif = DB::table('excel_data')
+        // Construction de la requête de base pour ce niveau
+        $niveauQuery = DB::table('excel_data')
             ->join('imported_files', 'excel_data.file_id', '=', 'imported_files.id')
             ->where('imported_files.semestre', 1)
-            ->where('imported_files.niveau_id', $niveau->id)
+            ->where('imported_files.niveau_id', $niveau->id);
+        
+        // Appliquer les filtres restants
+        if ($classe_id) {
+            $niveauQuery->where('imported_files.classe_id', $classe_id);
+        }
+        
+        if ($sexe) {
+            if ($sexe == 'F') {
+                $niveauQuery->whereRaw('JSON_EXTRACT(data, "$[3]") IN ("F", "f")');
+            } else if ($sexe == 'G') {
+                $niveauQuery->whereRaw('JSON_EXTRACT(data, "$[3]") IN ("H", "h", "M", "m", "G", "g")');
+            }
+        }
+        
+        if ($min_moyenne !== null) {
+            $niveauQuery->whereRaw('CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2)) >= ?', [$min_moyenne]);
+        }
+        
+        if ($max_moyenne !== null) {
+            $niveauQuery->whereRaw('CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2)) <= ?', [$max_moyenne]);
+        }
+
+        // Calcul de l'effectif
+        $effectif = $niveauQuery->clone()
             ->distinct()
             ->count(DB::raw('JSON_EXTRACT(data, "$[0]")'));
 
         // Calcul de la moyenne
-        $moyenneNiveau = DB::table('excel_data')
-            ->join('imported_files', 'excel_data.file_id', '=', 'imported_files.id')
-            ->where('imported_files.semestre', 1)
-            ->where('imported_files.niveau_id', $niveau->id)
+        $moyenneNiveauResult = $niveauQuery->clone()
             ->whereRaw('JSON_EXTRACT(data, "$[9]") IS NOT NULL')
             ->select(DB::raw('AVG(CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2))) as moyenne_niveau'))
             ->first();
+        $moyenneNiveau = $moyenneNiveauResult ? $moyenneNiveauResult->moyenne_niveau : 0;
 
         // Calcul du taux de réussite
-        $reussiteCount = DB::table('excel_data')
-            ->join('imported_files', 'excel_data.file_id', '=', 'imported_files.id')
-            ->where('imported_files.semestre', 1)
-            ->where('imported_files.niveau_id', $niveau->id)
+        $reussiteCount = $niveauQuery->clone()
             ->whereRaw('CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2)) >= 10')
             ->distinct()
             ->count(DB::raw('JSON_EXTRACT(data, "$[0]")'));
@@ -324,28 +361,19 @@ public function dashboard(Request $request)
             : 0;
 
         // Calcul des félicitations par niveau
-        $felicitationsNiveau = DB::table('excel_data')
-            ->join('imported_files', 'excel_data.file_id', '=', 'imported_files.id')
-            ->where('imported_files.semestre', 1)
-            ->where('imported_files.niveau_id', $niveau->id)
+        $felicitationsNiveau = $niveauQuery->clone()
             ->whereRaw('JSON_EXTRACT(data, "$[12]") LIKE "%élicitation%"')
             ->distinct()
             ->count(DB::raw('JSON_EXTRACT(data, "$[0]")'));
 
         // Calcul des encouragements par niveau
-        $encouragementsNiveau = DB::table('excel_data')
-            ->join('imported_files', 'excel_data.file_id', '=', 'imported_files.id')
-            ->where('imported_files.semestre', 1)
-            ->where('imported_files.niveau_id', $niveau->id)
+        $encouragementsNiveau = $niveauQuery->clone()
             ->whereRaw('JSON_EXTRACT(data, "$[12]") LIKE "%ncouragement%"')
             ->distinct()
             ->count(DB::raw('JSON_EXTRACT(data, "$[0]")'));
 
         // Calcul du tableau d'honneur par niveau
-        $tableauHonneurNiveau = DB::table('excel_data')
-            ->join('imported_files', 'excel_data.file_id', '=', 'imported_files.id')
-            ->where('imported_files.semestre', 1)
-            ->where('imported_files.niveau_id', $niveau->id)
+        $tableauHonneurNiveau = $niveauQuery->clone()
             ->whereRaw('JSON_EXTRACT(data, "$[12]") LIKE "%honneur%"')
             ->distinct()
             ->count(DB::raw('JSON_EXTRACT(data, "$[0]")'));
@@ -354,7 +382,7 @@ public function dashboard(Request $request)
             'id' => $niveau->id,
             'nom' => $niveau->nom,
             'code' => $niveau->code,
-            'moyenne' => $moyenneNiveau ? number_format($moyenneNiveau->moyenne_niveau, 2) : '0.00',
+            'moyenne' => $moyenneNiveau ? number_format($moyenneNiveau, 2) : '0.00',
             'effectif' => $effectif,
             'taux_reussite' => $tauxReussiteNiveau,
             'felicitations' => $felicitationsNiveau,
@@ -363,12 +391,23 @@ public function dashboard(Request $request)
         ];
     }
 
-    // 8. Récupération des valeurs pour les graphiques d'absences et retards
-    // Récupération des classes pour le graphique
-    $classesData = DB::table('classes')
-        ->where('active', 1)
-        ->orderBy('nom')
-        ->limit(14) // Limiter à 14 classes pour le graphique
+    // 8. Récupération des valeurs pour les graphiques d'absences et retards (adaptées aux filtres)
+    // On utilise la requête filtrée pour avoir des données cohérentes avec les filtres
+
+    // Récupérer jusqu'à 14 classes pour le graphique, selon les filtres appliqués
+    $classesQuery = DB::table('classes')
+        ->where('active', 1);
+    
+    if ($niveau_id) {
+        $classesQuery->where('niveau_id', $niveau_id);
+    }
+    
+    if ($classe_id) {
+        $classesQuery->where('id', $classe_id);
+    }
+    
+    $classesData = $classesQuery->orderBy('nom')
+        ->limit(14)
         ->pluck('nom')
         ->toArray();
 
@@ -376,16 +415,79 @@ public function dashboard(Request $request)
     $retardsData = [];
     $absencesData = [];
 
-    foreach ($classesData as $classe) {
-        // Dans un système réel, vous rechercheriez ces données dans votre base de données
-        // Ici nous utilisons des données aléatoires pour l'exemple
-        $retardsData[] = rand(5, 35);
-        $absencesData[] = rand(5, 35);
+    foreach ($classesData as $classeNom) {
+        // Requête pour trouver l'ID de la classe à partir de son nom
+        $classeObj = DB::table('classes')->where('nom', $classeNom)->first();
+        
+        if ($classeObj) {
+            $classeSpecificQuery = $query->clone()->where('imported_files.classe_id', $classeObj->id);
+            
+            // Calcul des retards (colonne 6, index 6 dans le JSON)
+            $retardsSum = $classeSpecificQuery->clone()
+                ->whereRaw('JSON_EXTRACT(data, "$[6]") IS NOT NULL')
+                ->selectRaw('SUM(CAST(REPLACE(JSON_EXTRACT(data, "$[6]"), ",", ".") AS UNSIGNED)) as total_retards')
+                ->first();
+            
+            // Calcul des absences (colonne 7, index 7 dans le JSON)
+            $absencesSum = $classeSpecificQuery->clone()
+                ->whereRaw('JSON_EXTRACT(data, "$[7]") IS NOT NULL')
+                ->selectRaw('SUM(CAST(REPLACE(JSON_EXTRACT(data, "$[7]"), ",", ".") AS UNSIGNED)) as total_absences')
+                ->first();
+            
+            $retardsData[] = $retardsSum && $retardsSum->total_retards ? $retardsSum->total_retards : 0;
+            $absencesData[] = $absencesSum && $absencesSum->total_absences ? $absencesSum->total_absences : 0;
+        } else {
+            // Si la classe n'est pas trouvée, on ajoute des zéros
+            $retardsData[] = 0;
+            $absencesData[] = 0;
+        }
+    }
+    
+    // Calcul des statistiques de performance selon les filtres
+    $performanceStats = [
+        'excellent' => 0,   // >= 16
+        'good' => 0,        // >= 14 et < 16
+        'average' => 0,     // >= 10 et < 14
+        'poor' => 0,        // < 10
+    ];
+    
+    // Si nous avons des élèves, calculons les statistiques de performance
+    if ($totalEleves > 0) {
+        $excellentCount = $query->clone()
+            ->whereRaw('CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2)) >= 16')
+            ->count();
+        
+        $goodCount = $query->clone()
+            ->whereRaw('CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2)) >= 14')
+            ->whereRaw('CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2)) < 16')
+            ->count();
+        
+        $averageCount = $query->clone()
+            ->whereRaw('CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2)) >= 10')
+            ->whereRaw('CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2)) < 14')
+            ->count();
+        
+        $poorCount = $query->clone()
+            ->whereRaw('CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2)) < 10')
+            ->count();
+        
+        $performanceStats = [
+            'excellent' => $totalEleves > 0 ? round(($excellentCount / $totalEleves) * 100) : 0,
+            'good' => $totalEleves > 0 ? round(($goodCount / $totalEleves) * 100) : 0,
+            'average' => $totalEleves > 0 ? round(($averageCount / $totalEleves) * 100) : 0,
+            'poor' => $totalEleves > 0 ? round(($poorCount / $totalEleves) * 100) : 0,
+        ];
     }
 
     // 9. Récupération des filtres pour le formulaire
     $niveauxTous = Niveau::orderBy('ordre')->get();
-    $classes = Classe::where('active', 1)->orderBy('nom')->get();
+    $classes = DB::table('classes');
+    
+    if ($niveau_id) {
+        $classes->where('niveau_id', $niveau_id);
+    }
+    
+    $classes = $classes->where('active', 1)->orderBy('nom')->get();
 
     // 10. Vérifier si une demande d'exportation est faite
     if ($request->has('export')) {
@@ -412,10 +514,10 @@ public function dashboard(Request $request)
             'classes',
             'etablissement',
             'fileCount',
-            'filterType',
             'classesData',
             'retardsData',
-            'absencesData'
+            'absencesData',
+            'performanceStats'
         ));
     }
 
@@ -443,17 +545,17 @@ public function dashboard(Request $request)
         'classes',
         'etablissement',
         'fileCount',
-        'filterType',
         'classesData',
         'retardsData',
         'absencesData',
+        'performanceStats',
         'niveau_id',
         'classe_id',
+        'sexe',
         'min_moyenne',
         'max_moyenne'
     ));
 }
-
 /**
  * Exporte le tableau de bord sous forme d'image après filtrage
  * Cette méthode utilise une capture d'écran côté serveur via une bibliothèque de capture comme Browsershot
