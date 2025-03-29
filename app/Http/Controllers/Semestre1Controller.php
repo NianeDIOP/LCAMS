@@ -571,85 +571,15 @@ public function dashboard(Request $request)
  * Exporte le tableau de bord sous forme d'image après filtrage
  * Cette méthode utilise une capture d'écran côté serveur via une bibliothèque de capture comme Browsershot
  */
-private function exportDashboardAsImage(Request $request, array $data)
-{
-    // Pour cette fonctionnalité, nous devons utiliser une bibliothèque comme Browsershot ou Puppeteer
-    // Voici une implémentation hypothétique avec Browsershot (vous devrez l'installer)
-    
-    // 1. Construire l'URL du dashboard avec tous les filtres appliqués
-    $dashboardUrl = route('semestre1.dashboard', [
-        'filter_type' => $request->input('filter_type', 'all'),
-        'niveau_id' => $request->input('niveau_id'),
-        'classe_id' => $request->input('classe_id'),
-        'min_moyenne' => $request->input('min_moyenne'),
-        'max_moyenne' => $request->input('max_moyenne'),
-        'capture' => 'true' // Paramètre spécial pour indiquer à la vue qu'elle est capturée
-    ]);
-    
-    // 2. Utiliser une vue intermédiaire pour l'exportation (sans les boutons et éléments d'interface)
-    // Cette vue est une version simplifiée du dashboard optimisée pour l'exportation
-    $view = view('semestre1.dashboard_export', $data)->render();
-    
-    try {
-        // 3. Option 1: Si vous avez Browsershot installé (recommandé)
-        // composer require spatie/browsershot
-        // Cette bibliothèque nécessite Node.js et Puppeteer
-        
-        /*
-        $fileName = 'dashboard_' . date('Ymd_His') . '.pdf';
-        $filePath = storage_path('app/public/exports/' . $fileName);
-        
-        // Assurez-vous que le répertoire existe
-        if (!is_dir(storage_path('app/public/exports'))) {
-            mkdir(storage_path('app/public/exports'), 0755, true);
-        }
-        
-        // Créer le PDF
-        Browsershot::html($view)
-            ->showBackground()
-            ->landscape()
-            ->format('A4')
-            ->margins(10, 10, 10, 10)
-            ->savePdf($filePath);
-        
-        // Télécharger le fichier
-        return response()->download($filePath, $fileName)->deleteFileAfterSend(true);
-        */
-        
-        // 4. Option 2: Si vous utilisez domPDF (plus simple mais moins fidèle)
-        // domPDF est déjà inclus via barryvdh/laravel-dompdf
-        
-        $pdf = PDF::loadHTML($view);
-        $pdf->setPaper('a4', 'landscape');
-        $pdf->setOptions([
-            'isHtml5ParserEnabled' => true,
-            'isRemoteEnabled' => true,
-            'dpi' => 150
-        ]);
-        
-        return $pdf->download('dashboard_' . date('Ymd_His') . '.pdf');
-        
-    } catch (\Exception $e) {
-        // En cas d'erreur, rediriger avec un message d'erreur
-        return redirect()->route('semestre1.dashboard', [
-            'filter_type' => $request->input('filter_type', 'all'),
-            'niveau_id' => $request->input('niveau_id'),
-            'classe_id' => $request->input('classe_id'),
-            'min_moyenne' => $request->input('min_moyenne'),
-            'max_moyenne' => $request->input('max_moyenne')
-        ])->with('error', 'Erreur lors de l\'exportation: ' . $e->getMessage());
-    }
-}
 
     /**
      * Affiche la page d'analyse des disciplines
      */
     /**
  * Affiche la page d'analyse des disciplines du semestre 1
- * en utilisant les données du 3ème onglet déjà extraites
+ * avec une extraction et analyse améliorée des données disciplinaires
  * 
- * @param Request $request
- * @return \Illuminate\Contracts\View\View
+
  */
 public function analyseDisciples(Request $request)
 {
@@ -673,7 +603,7 @@ public function analyseDisciples(Request $request)
             ->get();
     }
 
-    // 3. Récupérer les fichiers importés
+    // 3. Récupérer les fichiers importés selon les filtres
     $filesQuery = DB::table('imported_files')
         ->where('semestre', 1)
         ->orderBy('created_at', 'desc');
@@ -688,7 +618,7 @@ public function analyseDisciples(Request $request)
     
     $importedFiles = $filesQuery->get();
 
-    // 4. Extraire les disciplines de tous les fichiers importés
+    // 4. Extraire les disciplines et les données associées
     $allDisciplines = [];
     $disciplinesData = [];
 
@@ -701,7 +631,7 @@ public function analyseDisciples(Request $request)
             
             $spreadsheet = IOFactory::load($filePath);
             
-            // Vérifier si le 3ème onglet existe 
+            // Vérifier si le 3ème onglet (disciplines) existe 
             if ($spreadsheet->getSheetCount() < 3) {
                 continue; // Pas assez d'onglets, passer au suivant
             }
@@ -711,7 +641,7 @@ public function analyseDisciples(Request $request)
             $highestColumn = $worksheet->getHighestColumn();
             $highestRow = $worksheet->getHighestRow();
             
-            // Extraire les entêtes pour identifier les disciplines (en évitant les colonnes non pertinentes)
+            // Extraire les entêtes pour identifier les disciplines
             $headers = [];
             $disciplineColumns = [];
             
@@ -720,7 +650,7 @@ public function analyseDisciples(Request $request)
                 if (!empty($cellValue)) {
                     $headers[$col] = $cellValue;
                     
-                    // Ajouter aux disciplines (en excluant les colonnes non disciplinaires)
+                    // Ajouter aux disciplines (en excluant les colonnes administratives)
                     if (!in_array($cellValue, ['IEN', 'Prenom', 'Nom', 'Sexe', 'Moy.', 'Rang', 'Appréciations', 'Total'])) {
                         $allDisciplines[$cellValue] = 0; // Initialiser le compteur
                         $disciplineColumns[$cellValue] = $col;
@@ -728,7 +658,7 @@ public function analyseDisciples(Request $request)
                 }
             }
             
-            // Récupérer les noms des élèves et leur sexe depuis le premier onglet 
+            // Récupérer les infos des élèves depuis le premier onglet pour avoir le sexe
             $firstSheet = $spreadsheet->getSheet(0);
             $studentsInfo = [];
             
@@ -752,21 +682,23 @@ public function analyseDisciples(Request $request)
                 }
             }
             
-            // Extraire les données par discipline
+            // Extraire les données par discipline (depuis le 3ème onglet) en commençant par la ligne 3 pour éviter les en-têtes
             for ($row = 3; $row <= $highestRow; $row++) {
                 $ien = $worksheet->getCell('A' . $row)->getValue();
                 if (empty($ien) || !isset($studentsInfo[$ien])) continue;
                 
-                // Vérifier le sexe si un filtre est appliqué
+                // Filtrer par sexe si demandé
                 if ($sexe && $studentsInfo[$ien]['sexe'] != $sexe) continue;
                 
-                // Parcourir toutes les disciplines
+                // Parcourir toutes les disciplines identifiées
                 foreach ($disciplineColumns as $discName => $discCol) {
                     $note = $worksheet->getCell($discCol . $row)->getValue();
-                    if (is_numeric($note)) {
+                    
+                    // Vérifier si c'est une note valide
+                    if (is_numeric($note) || (is_string($note) && is_numeric(str_replace(',', '.', $note)))) {
                         $note = floatval(str_replace(',', '.', $note));
                         
-                        // Appliquer le filtre min/max moyenne si nécessaire
+                        // Appliquer les filtres min/max sur les moyennes
                         if (($min_moyenne !== null && $note < floatval($min_moyenne)) || 
                             ($max_moyenne !== null && $note > floatval($max_moyenne))) {
                             continue;
@@ -775,23 +707,25 @@ public function analyseDisciples(Request $request)
                         // Incrémenter le compteur de la discipline
                         $allDisciplines[$discName]++;
                         
-                        // Stocker les données pour l'analyse
+                        // Initialiser l'entrée de la discipline si nécessaire
                         if (!isset($disciplinesData[$discName])) {
                             $disciplinesData[$discName] = [
                                 'nom' => $discName,
                                 'notes' => [],
                                 'notes_filles' => [],
                                 'notes_garcons' => [],
-                                'eleves' => [],
-                                'effectif' => 0,
+                                'nb_eleves' => 0,
+                                'nb_filles' => 0,
+                                'nb_garcons' => 0,
                                 'classes' => [],
-                                'niveaux' => []
+                                'niveaux' => [],
+                                'eleves' => []
                             ];
                         }
                         
                         // Ajouter la note à la discipline
                         $disciplinesData[$discName]['notes'][] = $note;
-                        $disciplinesData[$discName]['effectif']++;
+                        $disciplinesData[$discName]['nb_eleves']++;
                         
                         // Ajouter les infos de l'élève
                         $disciplinesData[$discName]['eleves'][] = [
@@ -805,8 +739,10 @@ public function analyseDisciples(Request $request)
                         // Ajouter par sexe
                         if ($studentsInfo[$ien]['sexe'] == 'F') {
                             $disciplinesData[$discName]['notes_filles'][] = $note;
+                            $disciplinesData[$discName]['nb_filles']++;
                         } else if ($studentsInfo[$ien]['sexe'] == 'H') {
                             $disciplinesData[$discName]['notes_garcons'][] = $note;
+                            $disciplinesData[$discName]['nb_garcons']++;
                         }
                         
                         // Ajouter les classes et niveaux
@@ -819,12 +755,13 @@ public function analyseDisciples(Request $request)
                                 'id' => $classeId,
                                 'nom' => $classeInfo ? $classeInfo->nom : 'Classe ' . $classeId,
                                 'notes' => [],
-                                'effectif' => 0
+                                'count_eleves' => 0,
+                                'moyenne' => 0
                             ];
                         }
                         
                         $disciplinesData[$discName]['classes'][$classeId]['notes'][] = $note;
-                        $disciplinesData[$discName]['classes'][$classeId]['effectif']++;
+                        $disciplinesData[$discName]['classes'][$classeId]['count_eleves']++;
                         
                         if (!isset($disciplinesData[$discName]['niveaux'][$niveauId])) {
                             $niveauInfo = DB::table('niveaux')->find($niveauId);
@@ -833,22 +770,23 @@ public function analyseDisciples(Request $request)
                                 'nom' => $niveauInfo ? $niveauInfo->nom : 'Niveau ' . $niveauId,
                                 'code' => $niveauInfo ? $niveauInfo->code : 'N/A',
                                 'notes' => [],
-                                'effectif' => 0
+                                'count_eleves' => 0,
+                                'moyenne' => 0
                             ];
                         }
                         
                         $disciplinesData[$discName]['niveaux'][$niveauId]['notes'][] = $note;
-                        $disciplinesData[$discName]['niveaux'][$niveauId]['effectif']++;
+                        $disciplinesData[$discName]['niveaux'][$niveauId]['count_eleves']++;
                     }
                 }
             }
         } catch (\Exception $e) {
-            Log::error('Erreur lors de l\'analyse du fichier ' . ($file->nom_fichier ?? 'inconnu') . ': ' . $e->getMessage());
+            \Log::error('Erreur lors de l\'analyse du fichier ' . ($file->nom_fichier ?? 'inconnu') . ': ' . $e->getMessage());
             continue;
         }
     }
 
-    // 5. Trier les disciplines par fréquence et supprimer celles sans données
+    // 5. Trier les disciplines par fréquence et retirer celles sans données
     arsort($allDisciplines);
     foreach ($allDisciplines as $discName => $count) {
         if ($count == 0) {
@@ -856,18 +794,17 @@ public function analyseDisciples(Request $request)
         }
     }
 
-    // 6. Analyser la discipline sélectionnée en détail
+    // 6. Préparer les détails de la discipline sélectionnée
     $disciplineDetails = null;
     
     if ($discipline && isset($disciplinesData[$discipline])) {
         $discData = $disciplinesData[$discipline];
         
-        // Calculer les statistiques
+        // Calculer les moyennes générales et par sexe
         $notes = $discData['notes'];
         $notesFilles = $discData['notes_filles'];
         $notesGarcons = $discData['notes_garcons'];
         
-        // Moyenne générale et par sexe
         $moyenneGenerale = !empty($notes) ? array_sum($notes) / count($notes) : 0;
         $moyenneFilles = !empty($notesFilles) ? array_sum($notesFilles) / count($notesFilles) : 0;
         $moyenneGarcons = !empty($notesGarcons) ? array_sum($notesGarcons) / count($notesGarcons) : 0;
@@ -934,12 +871,26 @@ public function analyseDisciples(Request $request)
                 round(array_sum($niveauData['notes']) / count($niveauData['notes']), 2) : 0;
         }
         
+        // Stats complémentaires: min, max, écart-type
+        $minNote = !empty($notes) ? min($notes) : 0;
+        $maxNote = !empty($notes) ? max($notes) : 0;
+        
+        // Calcul de l'écart type
+        $ecartType = 0;
+        if (count($notes) > 1) {
+            $sumSqDiff = 0;
+            foreach ($notes as $note) {
+                $sumSqDiff += pow($note - $moyenneGenerale, 2);
+            }
+            $ecartType = round(sqrt($sumSqDiff / count($notes)), 2);
+        }
+        
         // Construire l'objet de détails de la discipline
         $disciplineDetails = [
             'nom' => $discipline,
-            'effectif' => count($notes),
-            'effectif_filles' => count($notesFilles),
-            'effectif_garcons' => count($notesGarcons),
+            'nb_eleves' => count($notes),
+            'nb_filles' => count($notesFilles),
+            'nb_garcons' => count($notesGarcons),
             'moyenne_generale' => round($moyenneGenerale, 2),
             'moyenne_filles' => round($moyenneFilles, 2),
             'moyenne_garcons' => round($moyenneGarcons, 2),
@@ -947,15 +898,16 @@ public function analyseDisciples(Request $request)
             'reussite' => $totalNotes > 0 ? round(($countReussite / $totalNotes) * 100) : 0,
             'reussite_filles' => count($notesFilles) > 0 ? round(($countReussiteFilles / count($notesFilles)) * 100) : 0,
             'reussite_garcons' => count($notesGarcons) > 0 ? round(($countReussiteGarcons / count($notesGarcons)) * 100) : 0,
-            'min_note' => !empty($notes) ? min($notes) : 0,
-            'max_note' => !empty($notes) ? max($notes) : 0,
+            'min_note' => $minNote,
+            'max_note' => $maxNote,
+            'ecart_type' => $ecartType,
             'classes' => $discData['classes'],
             'niveaux' => $discData['niveaux'],
             'eleves' => $discData['eleves']
         ];
     }
 
-    // 7. Récupérer la moyenne générale pour comparaison
+    // 7. Récupérer la moyenne générale globale pour comparaison
     $moyenneGeneraleQuery = DB::table('excel_data')
         ->join('imported_files', 'excel_data.file_id', '=', 'imported_files.id')
         ->where('imported_files.semestre', 1)
@@ -971,14 +923,11 @@ public function analyseDisciples(Request $request)
     }
     
     if ($sexe) {
-        // Filtrer par sexe en utilisant les données JSON (colonne 3 = sexe)
-        $moyenneGeneraleQuery->where(function($query) use ($sexe) {
-            if ($sexe == 'F') {
-                $query->whereRaw('JSON_EXTRACT(data, "$[3]") IN ("F", "f")');
-            } else {
-                $query->whereRaw('JSON_EXTRACT(data, "$[3]") IN ("H", "h", "M", "m", "G", "g")');
-            }
-        });
+        if ($sexe == 'F') {
+            $moyenneGeneraleQuery->whereRaw('JSON_EXTRACT(data, "$[3]") IN ("F", "f")');
+        } else {
+            $moyenneGeneraleQuery->whereRaw('JSON_EXTRACT(data, "$[3]") IN ("H", "h", "M", "m", "G", "g")');
+        }
     }
     
     $globalStats = $moyenneGeneraleQuery->first();
