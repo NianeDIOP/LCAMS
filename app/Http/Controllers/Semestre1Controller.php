@@ -158,6 +158,9 @@ public function index()
 /**
  * Affiche le tableau de bord du semestre 1 avec données filtrées
  */
+/**
+ * Affiche le tableau de bord du semestre 1 avec données filtrées
+ */
 public function dashboard(Request $request)
 {
     // 1. Récupération des paramètres de filtrage
@@ -392,8 +395,6 @@ public function dashboard(Request $request)
     }
 
     // 8. Récupération des valeurs pour les graphiques d'absences et retards (adaptées aux filtres)
-    // On utilise la requête filtrée pour avoir des données cohérentes avec les filtres
-
     // Récupérer jusqu'à 14 classes pour le graphique, selon les filtres appliqués
     $classesQuery = DB::table('classes')
         ->where('active', 1);
@@ -411,15 +412,17 @@ public function dashboard(Request $request)
         ->pluck('nom')
         ->toArray();
 
-    // Récupération des retards et absences par classe
+    // Initialiser les tableaux pour stocker les retards et absences
     $retardsData = [];
     $absencesData = [];
 
+    // Pour chaque classe, récupérer les retards et absences
     foreach ($classesData as $classeNom) {
-        // Requête pour trouver l'ID de la classe à partir de son nom
+        // Trouver l'ID de la classe à partir de son nom
         $classeObj = DB::table('classes')->where('nom', $classeNom)->first();
         
         if ($classeObj) {
+            // Créer une requête pour cette classe spécifique
             $classeSpecificQuery = $query->clone()->where('imported_files.classe_id', $classeObj->id);
             
             // Calcul des retards (colonne 6, index 6 dans le JSON)
@@ -434,13 +437,21 @@ public function dashboard(Request $request)
                 ->selectRaw('SUM(CAST(REPLACE(JSON_EXTRACT(data, "$[7]"), ",", ".") AS UNSIGNED)) as total_absences')
                 ->first();
             
-            $retardsData[] = $retardsSum && $retardsSum->total_retards ? $retardsSum->total_retards : 0;
-            $absencesData[] = $absencesSum && $absencesSum->total_absences ? $absencesSum->total_absences : 0;
+            // Ajouter les valeurs aux tableaux (0 si NULL)
+            $retardsData[] = ($retardsSum && isset($retardsSum->total_retards)) ? (int)$retardsSum->total_retards : 0;
+            $absencesData[] = ($absencesSum && isset($absencesSum->total_absences)) ? (int)$absencesSum->total_absences : 0;
         } else {
-            // Si la classe n'est pas trouvée, on ajoute des zéros
+            // Si la classe n'est pas trouvée, ajouter des zéros
             $retardsData[] = 0;
             $absencesData[] = 0;
         }
+    }
+
+    // Assurez-vous que les tableaux sont non vides pour éviter des erreurs JavaScript
+    if (empty($classesData)) {
+        $classesData = ['Aucune classe'];
+        $retardsData = [0];
+        $absencesData = [0];
     }
     
     // Calcul des statistiques de performance selon les filtres

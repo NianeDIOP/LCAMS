@@ -568,19 +568,19 @@
                                     
                                     <div class="row mt-2 small">
                                         <div class="col-3 text-center">
-                                            <span class="d-block fw-bold text-success">{{ $performanceStats['excellent'] ?? 0 }}%</span>
+                                            <span class="d-block fw-bold text-success" data-stat="excellent">{{ $performanceStats['excellent'] ?? 0 }}</span>
                                             <span>Excellent<br>(≥ 16)</span>
                                         </div>
                                         <div class="col-3 text-center">
-                                            <span class="d-block fw-bold text-info">{{ $performanceStats['good'] ?? 0 }}%</span>
+                                            <span class="d-block fw-bold text-info" data-stat="good">{{ $performanceStats['good'] ?? 0 }}</span>
                                             <span>Bien<br>(14-16)</span>
                                         </div>
                                         <div class="col-3 text-center">
-                                            <span class="d-block fw-bold text-warning">{{ $performanceStats['average'] ?? 0 }}%</span>
+                                            <span class="d-block fw-bold text-warning" data-stat="average">{{ $performanceStats['average'] ?? 0 }}</span>
                                             <span>Moyen<br>(10-14)</span>
                                         </div>
                                         <div class="col-3 text-center">
-                                            <span class="d-block fw-bold text-danger">{{ $performanceStats['poor'] ?? 0 }}%</span>
+                                            <span class="d-block fw-bold text-danger" data-stat="poor">{{ $performanceStats['poor'] ?? 0 }}</span>
                                             <span>Insuffisant<br>(< 10)</span>
                                         </div>
                                     </div>
@@ -684,7 +684,9 @@
                                             </td>
                                             <td class="text-center">{{ $niveau['effectif'] }}</td>
                                             <td class="text-center">
-                                                <span class="badge {{ floatval($niveau['moyenne']) >= 10 ? 'bg-success' : 'bg-danger' }}">
+                                                <span class="badge {{ floatval($niveau['moyenne']) >= 10 ? 'bg-success' : 'bg-danger' }}"
+                                                      data-niveau-code="{{ $niveau['code'] }}" 
+                                                      data-niveau-moyenne="{{ $niveau['moyenne'] }}">
                                                     {{ $niveau['moyenne'] }}
                                                 </span>
                                             </td>
@@ -692,9 +694,10 @@
                                                 <div class="progress" style="height: 5px; width: 80px; margin: 0 auto;">
                                                     <div class="progress-bar {{ $niveau['taux_reussite'] >= 70 ? 'bg-success' : ($niveau['taux_reussite'] >= 50 ? 'bg-warning' : 'bg-danger') }}" 
                                                          style="width: {{ $niveau['taux_reussite'] }}%" 
-                                                         title="{{ $niveau['taux_reussite'] }}%">
+                                                         title="{{ $niveau['taux_reussite'] }}%"
+                                                         data-niveau-reussite="{{ $niveau['taux_reussite'] }}">
                                                     </div>
-                                                </div>
+                                                    </div>
                                                 <small>{{ $niveau['taux_reussite'] }}%</small>
                                             </td>
                                             <td class="text-center">
@@ -858,6 +861,33 @@
                         </div>
                     </div>
                 </div>
+                
+                <!-- Données cachées pour les graphiques -->
+                <div class="d-none">
+                    <h6>Données pour les graphiques</h6>
+                    <div id="data-container">
+                        @foreach($classesData ?? [] as $index => $classe)
+                            <div class="data-item" 
+                                data-classe="{{ $classe }}" 
+                                data-retards="{{ $retardsData[$index] ?? 0 }}" 
+                                data-absences="{{ $absencesData[$index] ?? 0 }}">
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+                
+                <!-- Boutons d'exportation -->
+                <div class="d-flex justify-content-end mt-4">
+                    <a href="{{ route('semestre1.dashboard', ['export' => 'pdf'] + request()->query()) }}" class="btn btn-danger me-2">
+                        <i class="fas fa-file-pdf me-1"></i> Exporter en PDF
+                    </a>
+                    <a href="{{ route('semestre1.dashboard', ['export' => 'excel'] + request()->query()) }}" class="btn btn-success me-2">
+                        <i class="fas fa-file-excel me-1"></i> Exporter en Excel
+                    </a>
+                    <button type="button" class="btn btn-primary" onclick="window.print()">
+                        <i class="fas fa-print me-1"></i> Imprimer
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -865,6 +895,7 @@
 @endsection
 
 @section('scripts')
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Gestion du changement de niveau pour charger les classes associées
@@ -923,28 +954,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // Notification des filtres actifs
-    const urlParams = new URLSearchParams(window.location.search);
-    const hasFilters = urlParams.has('niveau_id') || urlParams.has('classe_id') || 
-                      urlParams.has('sexe') || urlParams.has('min_moyenne') || 
-                      urlParams.has('max_moyenne');
-    
-    if (hasFilters) {
-        // Ajouter une indication visuelle que des filtres sont actifs
-        const filterContainer = document.querySelector('.filter-container');
-        if (filterContainer) {
-            const filterBadge = document.createElement('div');
-            filterBadge.className = 'alert alert-info mt-2 mb-0 py-2';
-            filterBadge.innerHTML = '<i class="fas fa-info-circle me-2"></i>Les données affichées sont filtrées selon les critères sélectionnés.';
-            
-            // Insérer après le formulaire
-            const filterForm = document.getElementById('filterForm');
-            if (filterForm) {
-                filterForm.after(filterBadge);
-            }
-        }
-    }
-    
     // Configuration des couleurs
     const primaryColor = '#0062cc';
     const secondaryColor = '#6c757d';
@@ -953,299 +962,289 @@ document.addEventListener('DOMContentLoaded', function() {
     const warningColor = '#ffc107';
     const infoColor = '#17a2b8';
     
-    // IMPORTANT: S'assurer que les données existent avant de créer les graphiques
-    // Convertir les chaînes JSON en objets JavaScript
-    const statsNiveauxCodes = {{ json_encode(array_column($statsNiveaux ?? [], 'code') ?? []) }};
-    const statsNiveauxMoyennes = {{ json_encode(array_map(function($n) { return floatval($n['moyenne']); }, $statsNiveaux ?? [])) }};
-    const statsNiveauxTauxReussite = {{ json_encode(array_column($statsNiveaux ?? [], 'taux_reussite') ?? []) }};
-    const classesData = {{ json_encode($classesData ?? []) }};
-    const retardsData = {{ json_encode($retardsData ?? []) }};
-    const absencesData = {{ json_encode($absencesData ?? []) }};
-    
-    console.log("Données pour les graphiques:", {
-        niveauxCodes: statsNiveauxCodes,
-        niveauxMoyennes: statsNiveauxMoyennes,
-        niveauxReussite: statsNiveauxTauxReussite,
-        classes: classesData,
-        retards: retardsData,
-        absences: absencesData
-    });
-    
-    // 1. Graphique de distribution (ce graphique semble fonctionner correctement)
-    if (document.getElementById('distributionChart')) {
+    // Fonction pour sécuriser la création des graphiques
+    function createChart(canvasId, config) {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas) {
+            console.warn(`Canvas #${canvasId} non trouvé`);
+            return null;
+        }
+        
         try {
-            const distributionCtx = document.getElementById('distributionChart').getContext('2d');
-            new Chart(distributionCtx, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Excellent (≥16)', 'Bien (14-16)', 'Moyen (10-14)', 'Insuffisant (<10)'],
-                    datasets: [{
-                        data: [
-                            {{ $performanceStats['excellent'] ?? 0 }},
-                            {{ $performanceStats['good'] ?? 0 }},
-                            {{ $performanceStats['average'] ?? 0 }},
-                            {{ $performanceStats['poor'] ?? 0 }}
-                        ],
-                        backgroundColor: [successColor, infoColor, warningColor, dangerColor],
-                        borderWidth: 0
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: {
-                                boxWidth: 12,
-                                padding: 15,
-                                font: {
-                                    size: 11
-                                }
-                            }
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    return `${context.label}: ${context.parsed}%`;
-                                }
+            const ctx = canvas.getContext('2d');
+            const chart = new Chart(ctx, config);
+            canvas.__chart = true;
+            return chart;
+        } catch (error) {
+            console.error(`Erreur lors de la création du graphique ${canvasId}:`, error);
+            return null;
+        }
+    }
+    
+    // Fonction pour vérifier si les données sont valides
+    function hasValidData(data) {
+        return data && Array.isArray(data) && data.length > 0;
+    }
+    
+    // 1. Graphique de distribution (Performance)
+    if (document.getElementById('distributionChart')) {
+        // Récupérer les valeurs depuis les éléments HTML
+        const excellent = parseFloat(document.querySelector('[data-stat="excellent"]')?.textContent || 0);
+        const good = parseFloat(document.querySelector('[data-stat="good"]')?.textContent || 0);
+        const average = parseFloat(document.querySelector('[data-stat="average"]')?.textContent || 0);
+        const poor = parseFloat(document.querySelector('[data-stat="poor"]')?.textContent || 0);
+        
+        createChart('distributionChart', {
+            type: 'doughnut',
+            data: {
+                labels: ['Excellent (≥16)', 'Bien (14-16)', 'Moyen (10-14)', 'Insuffisant (<10)'],
+                datasets: [{
+                    data: [excellent, good, average, poor],
+                    backgroundColor: [successColor, infoColor, warningColor, dangerColor],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            boxWidth: 12,
+                            padding: 15,
+                            font: {
+                                size: 11
                             }
                         }
                     },
-                    cutout: '60%'
-                }
-            });
-            console.log("Graphique de distribution créé avec succès");
-        } catch (error) {
-            console.error("Erreur lors de la création du graphique de distribution:", error);
-        }
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return `${context.label}: ${context.raw}%`;
+                            }
+                        }
+                    }
+                },
+                cutout: '60%'
+            }
+        });
     }
     
     // 2. Graphique des moyennes par niveau
-    if (document.getElementById('niveauxMoyenneChart') && statsNiveauxCodes && statsNiveauxCodes.length > 0) {
-        try {
-            const niveauxMoyenneCtx = document.getElementById('niveauxMoyenneChart').getContext('2d');
-            new Chart(niveauxMoyenneCtx, {
-                type: 'bar',
-                data: {
-                    labels: statsNiveauxCodes,
-                    datasets: [{
-                        label: 'Moyenne générale',
-                        data: statsNiveauxMoyennes,
-                        backgroundColor: statsNiveauxMoyennes.map(val => parseFloat(val) >= 10 ? successColor : dangerColor),
-                        borderColor: statsNiveauxMoyennes.map(val => parseFloat(val) >= 10 ? successColor : dangerColor),
-                        borderWidth: 1,
-                        borderRadius: 4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            display: false
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    return `Moyenne: ${parseFloat(context.parsed.y).toFixed(2)}`;
-                                }
-                            }
-                        }
+    const statsNiveauxCodes = Array.from(document.querySelectorAll('[data-niveau-code]'))
+        .map(el => el.getAttribute('data-niveau-code'));
+    
+    const statsNiveauxMoyennes = Array.from(document.querySelectorAll('[data-niveau-moyenne]'))
+        .map(el => parseFloat(el.getAttribute('data-niveau-moyenne')));
+    
+    if (document.getElementById('niveauxMoyenneChart') && hasValidData(statsNiveauxCodes) && hasValidData(statsNiveauxMoyennes)) {
+        createChart('niveauxMoyenneChart', {
+            type: 'bar',
+            data: {
+                labels: statsNiveauxCodes,
+                datasets: [{
+                    label: 'Moyenne générale',
+                    data: statsNiveauxMoyennes,
+                    backgroundColor: statsNiveauxMoyennes.map(val => parseFloat(val) >= 10 ? successColor : dangerColor),
+                    borderColor: statsNiveauxMoyennes.map(val => parseFloat(val) >= 10 ? successColor : dangerColor),
+                    borderWidth: 1,
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
                     },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            max: 20,
-                            ticks: {
-                                callback: function(value) {
-                                    return value.toFixed(1);
-                                }
-                            },
-                            grid: {
-                                color: 'rgba(0, 0, 0, 0.05)'
-                            }
-                        },
-                        x: {
-                            grid: {
-                                display: false
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return `Moyenne: ${parseFloat(context.raw).toFixed(2)}`;
                             }
                         }
                     }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 20,
+                        ticks: {
+                            callback: function(value) {
+                                return value.toFixed(1);
+                            }
+                        },
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.05)'
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false
+                        }
+                    }
                 }
-            });
-            console.log("Graphique des moyennes par niveau créé avec succès");
-        } catch (error) {
-            console.error("Erreur lors de la création du graphique des moyennes par niveau:", error);
-            // Afficher un message dans le conteneur du graphique
-            const container = document.getElementById('niveauxMoyenneChart').parentNode;
-            container.innerHTML = '<div class="alert alert-warning mt-3 mb-0">Impossible d\'afficher ce graphique avec les filtres actuels. Données insuffisantes.</div>';
-        }
+            }
+        });
     } else if (document.getElementById('niveauxMoyenneChart')) {
-        // Aucune donnée, afficher un message
-        const container = document.getElementById('niveauxMoyenneChart').parentNode;
-        container.innerHTML = '<div class="alert alert-warning mt-3 mb-0">Aucune donnée disponible pour ce graphique avec les filtres actuels.</div>';
+        document.getElementById('niveauxMoyenneChart').parentNode.innerHTML = 
+            '<div class="alert alert-warning mt-3 mb-0">Aucune donnée disponible pour ce graphique avec les filtres actuels.</div>';
     }
     
     // 3. Graphique du taux de réussite par niveau
-    if (document.getElementById('niveauxReussiteChart') && statsNiveauxCodes && statsNiveauxCodes.length > 0) {
-        try {
-            const niveauxReussiteCtx = document.getElementById('niveauxReussiteChart').getContext('2d');
-            new Chart(niveauxReussiteCtx, {
-                type: 'bar',
-                data: {
-                    labels: statsNiveauxCodes,
-                    datasets: [{
-                        label: 'Taux de réussite',
-                        data: statsNiveauxTauxReussite,
-                        backgroundColor: statsNiveauxTauxReussite.map(val => 
-                            parseInt(val) >= 70 ? successColor : (parseInt(val) >= 50 ? warningColor : dangerColor)
-                        ),
-                        borderColor: statsNiveauxTauxReussite.map(val => 
-                            parseInt(val) >= 70 ? successColor : (parseInt(val) >= 50 ? warningColor : dangerColor)
-                        ),
-                        borderWidth: 1,
-                        borderRadius: 4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            display: false
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    return `Taux de réussite: ${context.parsed.y}%`;
-                                }
-                            }
-                        }
+    const statsNiveauxTauxReussite = Array.from(document.querySelectorAll('[data-niveau-reussite]'))
+        .map(el => parseFloat(el.getAttribute('data-niveau-reussite')));
+    
+    if (document.getElementById('niveauxReussiteChart') && hasValidData(statsNiveauxCodes) && hasValidData(statsNiveauxTauxReussite)) {
+        createChart('niveauxReussiteChart', {
+            type: 'bar',
+            data: {
+                labels: statsNiveauxCodes,
+                datasets: [{
+                    label: 'Taux de réussite',
+                    data: statsNiveauxTauxReussite,
+                    backgroundColor: statsNiveauxTauxReussite.map(val => 
+                        parseInt(val) >= 70 ? successColor : (parseInt(val) >= 50 ? warningColor : dangerColor)
+                    ),
+                    borderColor: statsNiveauxTauxReussite.map(val => 
+                        parseInt(val) >= 70 ? successColor : (parseInt(val) >= 50 ? warningColor : dangerColor)
+                    ),
+                    borderWidth: 1,
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
                     },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            max: 100,
-                            ticks: {
-                                callback: function(value) {
-                                    return `${value}%`;
-                                }
-                            },
-                            grid: {
-                                color: 'rgba(0, 0, 0, 0.05)'
-                            }
-                        },
-                        x: {
-                            grid: {
-                                display: false
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return `Taux de réussite: ${context.raw}%`;
                             }
                         }
                     }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: {
+                            callback: function(value) {
+                                return `${value}%`;
+                            }
+                        },
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.05)'
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false
+                        }
+                    }
                 }
-            });
-            console.log("Graphique du taux de réussite par niveau créé avec succès");
-        } catch (error) {
-            console.error("Erreur lors de la création du graphique du taux de réussite par niveau:", error);
-            // Afficher un message dans le conteneur du graphique
-            const container = document.getElementById('niveauxReussiteChart').parentNode;
-            container.innerHTML = '<div class="alert alert-warning mt-3 mb-0">Impossible d\'afficher ce graphique avec les filtres actuels. Données insuffisantes.</div>';
-        }
+            }
+        });
     } else if (document.getElementById('niveauxReussiteChart')) {
-        // Aucune donnée, afficher un message
-        const container = document.getElementById('niveauxReussiteChart').parentNode;
-        container.innerHTML = '<div class="alert alert-warning mt-3 mb-0">Aucune donnée disponible pour ce graphique avec les filtres actuels.</div>';
+        document.getElementById('niveauxReussiteChart').parentNode.innerHTML = 
+            '<div class="alert alert-warning mt-3 mb-0">Aucune donnée disponible pour ce graphique avec les filtres actuels.</div>';
     }
     
     // 4. Graphique des retards et absences
-    if (document.getElementById('absencesChart') && classesData && classesData.length > 0) {
-        try {
-            const absencesCtx = document.getElementById('absencesChart').getContext('2d');
-            new Chart(absencesCtx, {
-                type: 'bar',
-                data: {
-                    labels: classesData,
-                    datasets: [
-                        {
-                            label: 'Retards',
-                            data: retardsData,
-                            backgroundColor: infoColor,
-                            borderColor: infoColor,
-                            borderWidth: 1,
-                            borderRadius: 4,
-                            barPercentage: 0.7,
-                            categoryPercentage: 0.7
-                        },
-                        {
-                            label: 'Absences',
-                            data: absencesData,
-                            backgroundColor: dangerColor,
-                            borderColor: dangerColor,
-                            borderWidth: 1,
-                            borderRadius: 4,
-                            barPercentage: 0.7,
-                            categoryPercentage: 0.7
-                        }
-                    ]
+    // 4. Graphique des retards et absences
+        const dataItems = document.querySelectorAll('#data-container .data-item');
+        const classesData = Array.from(dataItems).map(el => el.getAttribute('data-classe'));
+        const retardsData = Array.from(dataItems).map(el => parseInt(el.getAttribute('data-retards')) || 0);
+        const absencesData = Array.from(dataItems).map(el => parseInt(el.getAttribute('data-absences')) || 0);
+
+        console.log("Données pour le graphique des retards et absences:", {
+            classes: classesData,
+            retards: retardsData,
+            absences: absencesData
+        });
+    
+    if (document.getElementById('absencesChart') && hasValidData(classesData)) {
+        createChart('absencesChart', {
+            type: 'bar',
+            data: {
+                labels: classesData,
+                datasets: [
+                    {
+                        label: 'Retards',
+                        data: retardsData,
+                        backgroundColor: infoColor,
+                        borderColor: infoColor,
+                        borderWidth: 1,
+                        borderRadius: 4,
+                        barPercentage: 0.7,
+                        categoryPercentage: 0.7
+                    },
+                    {
+                        label: 'Absences',
+                        data: absencesData,
+                        backgroundColor: dangerColor,
+                        borderColor: dangerColor,
+                        borderWidth: 1,
+                        borderRadius: 4,
+                        barPercentage: 0.7,
+                        categoryPercentage: 0.7
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'top'
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false
+                    }
                 },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'top'
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Nombre'
                         },
-                        tooltip: {
-                            mode: 'index',
-                            intersect: false
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.05)'
                         }
                     },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            title: {
-                                display: true,
-                                text: 'Nombre'
-                            },
-                            grid: {
-                                color: 'rgba(0, 0, 0, 0.05)'
-                            }
-                        },
-                        x: {
-                            grid: {
-                                display: false
-                            }
+                    x: {
+                        grid: {
+                            display: false
                         }
                     }
                 }
-            });
-            console.log("Graphique des retards et absences créé avec succès");
-        } catch (error) {
-            console.error("Erreur lors de la création du graphique des retards et absences:", error);
-            // Afficher un message dans le conteneur du graphique
-            const container = document.getElementById('absencesChart').parentNode;
-            container.innerHTML = '<div class="alert alert-warning mt-3 mb-0">Impossible d\'afficher ce graphique avec les filtres actuels. Données insuffisantes.</div>';
-        }
+            }
+        });
     } else if (document.getElementById('absencesChart')) {
-        // Aucune donnée, afficher un message
-        const container = document.getElementById('absencesChart').parentNode;
-        container.innerHTML = '<div class="alert alert-warning mt-3 mb-0">Aucune donnée disponible pour ce graphique avec les filtres actuels.</div>';
+        document.getElementById('absencesChart').parentNode.innerHTML = 
+            '<div class="alert alert-warning mt-3 mb-0">Aucune donnée disponible pour ce graphique avec les filtres actuels.</div>';
     }
     
-    // Ajouter des boutons d'exportation
-    document.querySelector('.dashboard-container').insertAdjacentHTML('beforeend', `
-        <div class="d-flex justify-content-end mt-4">
-            <a href="{{ route('semestre1.dashboard', ['export' => 'pdf'] + request()->query()) }}" class="btn btn-danger me-2">
-                <i class="fas fa-file-pdf me-1"></i> Exporter en PDF
-            </a>
-            <a href="{{ route('semestre1.dashboard', ['export' => 'excel'] + request()->query()) }}" class="btn btn-success me-2">
-                <i class="fas fa-file-excel me-1"></i> Exporter en Excel
-            </a>
-            <button type="button" class="btn btn-primary" onclick="window.print()">
-                <i class="fas fa-print me-1"></i> Imprimer
-            </button>
-        </div>
-    `);
+    // Afficher un message global s'il n'y a pas assez de données pour les graphiques
+    const graphiques = document.querySelectorAll('canvas');
+    let graphiquesValides = 0;
+    
+    graphiques.forEach(canvas => {
+        if (canvas.__chart) graphiquesValides++;
+    });
+    
+    const graphiquesFeedback = document.getElementById('graphiques-feedback');
+    if (graphiquesFeedback && graphiquesValides === 0 && graphiques.length > 0) {
+        graphiquesFeedback.style.display = 'block';
+    }
 });
 </script>
 @endsection
