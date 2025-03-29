@@ -581,6 +581,10 @@ public function dashboard(Request $request)
  * 
 
  */
+/**
+ * Affiche la page d'analyse des disciplines du semestre 1
+ * Extraction et analyse des moyennes (Moy D) par discipline
+ */
 public function analyseDisciples(Request $request)
 {
     // 1. Récupération des paramètres de filtrage
@@ -618,7 +622,7 @@ public function analyseDisciples(Request $request)
     
     $importedFiles = $filesQuery->get();
 
-    // 4. Extraire les disciplines et les données associées
+    // 4. Trouver toutes les disciplines disponibles et leurs données
     $allDisciplines = [];
     $disciplinesData = [];
 
@@ -641,19 +645,32 @@ public function analyseDisciples(Request $request)
             $highestColumn = $worksheet->getHighestColumn();
             $highestRow = $worksheet->getHighestRow();
             
-            // Extraire les entêtes pour identifier les disciplines
+            // Analyser les en-têtes pour trouver les disciplines et les colonnes Moy D
             $headers = [];
-            $disciplineColumns = [];
+            $disciplineNames = [];
+            $moyDColumns = [];
             
             for ($col = 'A'; $col <= $highestColumn; $col++) {
-                $cellValue = $worksheet->getCell($col . '1')->getValue();
-                if (!empty($cellValue)) {
-                    $headers[$col] = $cellValue;
+                $headerValue = $worksheet->getCell($col . '1')->getValue();
+                $moyDValue = $worksheet->getCell($col . '2')->getValue();
+                
+                $headers[$col] = $headerValue;
+                
+                // Identifier les disciplines et leurs colonnes Moy D
+                if (!empty($headerValue) && $headerValue != 'IEN' && $headerValue != 'Prenom' && $headerValue != 'Nom' && $headerValue != 'Sexe' && 
+                    $headerValue != 'Moy.' && $headerValue != 'Rang' && $headerValue != 'Appréciations') {
                     
-                    // Ajouter aux disciplines (en excluant les colonnes administratives)
-                    if (!in_array($cellValue, ['IEN', 'Prenom', 'Nom', 'Sexe', 'Moy.', 'Rang', 'Appréciations', 'Total'])) {
-                        $allDisciplines[$cellValue] = 0; // Initialiser le compteur
-                        $disciplineColumns[$cellValue] = $col;
+                    // Si on trouve une colonne Moy D
+                    if ($moyDValue === 'Moy D') {
+                        // Recherche de la discipline associée
+                        $disciplineName = $headerValue;
+                        
+                        if (!isset($allDisciplines[$disciplineName])) {
+                            $allDisciplines[$disciplineName] = 0;
+                        }
+                        
+                        $disciplineNames[$col] = $disciplineName;
+                        $moyDColumns[$col] = $col;
                     }
                 }
             }
@@ -682,7 +699,7 @@ public function analyseDisciples(Request $request)
                 }
             }
             
-            // Extraire les données par discipline (depuis le 3ème onglet) en commençant par la ligne 3 pour éviter les en-têtes
+            // Extraire les moyennes par discipline pour chaque élève
             for ($row = 3; $row <= $highestRow; $row++) {
                 $ien = $worksheet->getCell('A' . $row)->getValue();
                 if (empty($ien) || !isset($studentsInfo[$ien])) continue;
@@ -690,93 +707,96 @@ public function analyseDisciples(Request $request)
                 // Filtrer par sexe si demandé
                 if ($sexe && $studentsInfo[$ien]['sexe'] != $sexe) continue;
                 
-                // Parcourir toutes les disciplines identifiées
-                foreach ($disciplineColumns as $discName => $discCol) {
-                    $note = $worksheet->getCell($discCol . $row)->getValue();
+                // Parcourir les colonnes Moy D identifiées
+                foreach ($moyDColumns as $col) {
+                    $disciplineName = $disciplineNames[$col];
+                    $note = $worksheet->getCell($col . $row)->getValue();
                     
-                    // Vérifier si c'est une note valide
-                    if (is_numeric($note) || (is_string($note) && is_numeric(str_replace(',', '.', $note)))) {
+                    // Vérifier que c'est une note valide et appliquer les filtres de min/max
+                    if (is_numeric(str_replace(',', '.', $note))) {
                         $note = floatval(str_replace(',', '.', $note));
                         
-                        // Appliquer les filtres min/max sur les moyennes
                         if (($min_moyenne !== null && $note < floatval($min_moyenne)) || 
                             ($max_moyenne !== null && $note > floatval($max_moyenne))) {
                             continue;
                         }
                         
                         // Incrémenter le compteur de la discipline
-                        $allDisciplines[$discName]++;
+                        $allDisciplines[$disciplineName]++;
                         
-                        // Initialiser l'entrée de la discipline si nécessaire
-                        if (!isset($disciplinesData[$discName])) {
-                            $disciplinesData[$discName] = [
-                                'nom' => $discName,
-                                'notes' => [],
-                                'notes_filles' => [],
-                                'notes_garcons' => [],
-                                'nb_eleves' => 0,
-                                'nb_filles' => 0,
-                                'nb_garcons' => 0,
-                                'classes' => [],
-                                'niveaux' => [],
-                                'eleves' => []
+                        // Si on n'analyse pas une discipline spécifique ou si c'est la discipline recherchée
+                        if (!$discipline || $disciplineName == $discipline) {
+                            // Initialiser l'entrée si nécessaire
+                            if (!isset($disciplinesData[$disciplineName])) {
+                                $disciplinesData[$disciplineName] = [
+                                    'nom' => $disciplineName,
+                                    'notes' => [],
+                                    'notes_filles' => [],
+                                    'notes_garcons' => [],
+                                    'nb_eleves' => 0,
+                                    'nb_filles' => 0,
+                                    'nb_garcons' => 0,
+                                    'classes' => [],
+                                    'niveaux' => [],
+                                    'eleves' => []
+                                ];
+                            }
+                            
+                            // Ajouter la note
+                            $disciplinesData[$disciplineName]['notes'][] = $note;
+                            $disciplinesData[$disciplineName]['nb_eleves']++;
+                            
+                            // Ajouter les infos de l'élève
+                            $disciplinesData[$disciplineName]['eleves'][] = [
+                                'ien' => $ien,
+                                'prenom' => $studentsInfo[$ien]['prenom'],
+                                'nom' => $studentsInfo[$ien]['nom'],
+                                'sexe' => $studentsInfo[$ien]['sexe'],
+                                'note' => $note
                             ];
+                            
+                            // Ajouter par sexe
+                            if ($studentsInfo[$ien]['sexe'] == 'F') {
+                                $disciplinesData[$disciplineName]['notes_filles'][] = $note;
+                                $disciplinesData[$disciplineName]['nb_filles']++;
+                            } else if (in_array($studentsInfo[$ien]['sexe'], ['H', 'M', 'G'])) {
+                                $disciplinesData[$disciplineName]['notes_garcons'][] = $note;
+                                $disciplinesData[$disciplineName]['nb_garcons']++;
+                            }
+                            
+                            // Ajouter aux classes et niveaux
+                            $classeId = $file->classe_id;
+                            $niveauId = $file->niveau_id;
+                            
+                            if (!isset($disciplinesData[$disciplineName]['classes'][$classeId])) {
+                                $classeInfo = DB::table('classes')->find($classeId);
+                                $disciplinesData[$disciplineName]['classes'][$classeId] = [
+                                    'id' => $classeId,
+                                    'nom' => $classeInfo ? $classeInfo->nom : 'Classe ' . $classeId,
+                                    'notes' => [],
+                                    'count_eleves' => 0,
+                                    'moyenne' => 0
+                                ];
+                            }
+                            
+                            $disciplinesData[$disciplineName]['classes'][$classeId]['notes'][] = $note;
+                            $disciplinesData[$disciplineName]['classes'][$classeId]['count_eleves']++;
+                            
+                            if (!isset($disciplinesData[$disciplineName]['niveaux'][$niveauId])) {
+                                $niveauInfo = DB::table('niveaux')->find($niveauId);
+                                $disciplinesData[$disciplineName]['niveaux'][$niveauId] = [
+                                    'id' => $niveauId,
+                                    'nom' => $niveauInfo ? $niveauInfo->nom : 'Niveau ' . $niveauId,
+                                    'code' => $niveauInfo ? $niveauInfo->code : 'N/A',
+                                    'notes' => [],
+                                    'count_eleves' => 0,
+                                    'moyenne' => 0
+                                ];
+                            }
+                            
+                            $disciplinesData[$disciplineName]['niveaux'][$niveauId]['notes'][] = $note;
+                            $disciplinesData[$disciplineName]['niveaux'][$niveauId]['count_eleves']++;
                         }
-                        
-                        // Ajouter la note à la discipline
-                        $disciplinesData[$discName]['notes'][] = $note;
-                        $disciplinesData[$discName]['nb_eleves']++;
-                        
-                        // Ajouter les infos de l'élève
-                        $disciplinesData[$discName]['eleves'][] = [
-                            'ien' => $ien,
-                            'prenom' => $studentsInfo[$ien]['prenom'],
-                            'nom' => $studentsInfo[$ien]['nom'],
-                            'sexe' => $studentsInfo[$ien]['sexe'],
-                            'note' => $note
-                        ];
-                        
-                        // Ajouter par sexe
-                        if ($studentsInfo[$ien]['sexe'] == 'F') {
-                            $disciplinesData[$discName]['notes_filles'][] = $note;
-                            $disciplinesData[$discName]['nb_filles']++;
-                        } else if ($studentsInfo[$ien]['sexe'] == 'H') {
-                            $disciplinesData[$discName]['notes_garcons'][] = $note;
-                            $disciplinesData[$discName]['nb_garcons']++;
-                        }
-                        
-                        // Ajouter les classes et niveaux
-                        $classeId = $file->classe_id;
-                        $niveauId = $file->niveau_id;
-                        
-                        if (!isset($disciplinesData[$discName]['classes'][$classeId])) {
-                            $classeInfo = DB::table('classes')->find($classeId);
-                            $disciplinesData[$discName]['classes'][$classeId] = [
-                                'id' => $classeId,
-                                'nom' => $classeInfo ? $classeInfo->nom : 'Classe ' . $classeId,
-                                'notes' => [],
-                                'count_eleves' => 0,
-                                'moyenne' => 0
-                            ];
-                        }
-                        
-                        $disciplinesData[$discName]['classes'][$classeId]['notes'][] = $note;
-                        $disciplinesData[$discName]['classes'][$classeId]['count_eleves']++;
-                        
-                        if (!isset($disciplinesData[$discName]['niveaux'][$niveauId])) {
-                            $niveauInfo = DB::table('niveaux')->find($niveauId);
-                            $disciplinesData[$discName]['niveaux'][$niveauId] = [
-                                'id' => $niveauId,
-                                'nom' => $niveauInfo ? $niveauInfo->nom : 'Niveau ' . $niveauId,
-                                'code' => $niveauInfo ? $niveauInfo->code : 'N/A',
-                                'notes' => [],
-                                'count_eleves' => 0,
-                                'moyenne' => 0
-                            ];
-                        }
-                        
-                        $disciplinesData[$discName]['niveaux'][$niveauId]['notes'][] = $note;
-                        $disciplinesData[$discName]['niveaux'][$niveauId]['count_eleves']++;
                     }
                 }
             }
@@ -786,11 +806,18 @@ public function analyseDisciples(Request $request)
         }
     }
 
-    // 5. Trier les disciplines par fréquence et retirer celles sans données
-    arsort($allDisciplines);
-    foreach ($allDisciplines as $discName => $count) {
-        if ($count == 0) {
-            unset($allDisciplines[$discName]);
+    // 5. Calculer les moyennes pour les classes et niveaux
+    foreach ($disciplinesData as $discName => &$discData) {
+        foreach ($discData['classes'] as &$classeData) {
+            if (!empty($classeData['notes'])) {
+                $classeData['moyenne'] = array_sum($classeData['notes']) / count($classeData['notes']);
+            }
+        }
+        
+        foreach ($discData['niveaux'] as &$niveauData) {
+            if (!empty($niveauData['notes'])) {
+                $niveauData['moyenne'] = array_sum($niveauData['notes']) / count($niveauData['notes']);
+            }
         }
     }
 
@@ -810,66 +837,24 @@ public function analyseDisciples(Request $request)
         $moyenneGarcons = !empty($notesGarcons) ? array_sum($notesGarcons) / count($notesGarcons) : 0;
         
         // Répartition par catégorie
+        $excellent = count(array_filter($notes, function($n) { return $n >= 16; }));
+        $bien = count(array_filter($notes, function($n) { return $n >= 14 && $n < 16; }));
+        $assezBien = count(array_filter($notes, function($n) { return $n >= 12 && $n < 14; }));
+        $passable = count(array_filter($notes, function($n) { return $n >= 10 && $n < 12; }));
+        $insuffisant = count(array_filter($notes, function($n) { return $n < 10; }));
+        
+        $totalNotes = count($notes);
         $distribution = [
-            'excellent' => 0,  // >= 16
-            'bien' => 0,       // 14-15.99
-            'assez_bien' => 0, // 12-13.99
-            'passable' => 0,   // 10-11.99
-            'insuffisant' => 0 // < 10
+            'excellent' => $totalNotes > 0 ? round(($excellent / $totalNotes) * 100) : 0,
+            'bien' => $totalNotes > 0 ? round(($bien / $totalNotes) * 100) : 0,
+            'assez_bien' => $totalNotes > 0 ? round(($assezBien / $totalNotes) * 100) : 0,
+            'passable' => $totalNotes > 0 ? round(($passable / $totalNotes) * 100) : 0,
+            'insuffisant' => $totalNotes > 0 ? round(($insuffisant / $totalNotes) * 100) : 0
         ];
         
-        $countReussite = 0;
-        $countReussiteFilles = 0;
-        $countReussiteGarcons = 0;
-        
-        foreach ($notes as $note) {
-            if ($note >= 16) {
-                $distribution['excellent']++;
-            } elseif ($note >= 14) {
-                $distribution['bien']++;
-            } elseif ($note >= 12) {
-                $distribution['assez_bien']++;
-            } elseif ($note >= 10) {
-                $distribution['passable']++;
-            } else {
-                $distribution['insuffisant']++;
-            }
-            
-            if ($note >= 10) {
-                $countReussite++;
-            }
-        }
-        
-        foreach ($notesFilles as $note) {
-            if ($note >= 10) {
-                $countReussiteFilles++;
-            }
-        }
-        
-        foreach ($notesGarcons as $note) {
-            if ($note >= 10) {
-                $countReussiteGarcons++;
-            }
-        }
-        
-        // Convertir la distribution en pourcentages
-        $totalNotes = count($notes);
-        if ($totalNotes > 0) {
-            foreach ($distribution as $key => $value) {
-                $distribution[$key] = round(($value / $totalNotes) * 100);
-            }
-        }
-        
-        // Calculer les moyennes par classe et niveau
-        foreach ($discData['classes'] as $classeId => &$classeData) {
-            $classeData['moyenne'] = !empty($classeData['notes']) ? 
-                round(array_sum($classeData['notes']) / count($classeData['notes']), 2) : 0;
-        }
-        
-        foreach ($discData['niveaux'] as $niveauId => &$niveauData) {
-            $niveauData['moyenne'] = !empty($niveauData['notes']) ? 
-                round(array_sum($niveauData['notes']) / count($niveauData['notes']), 2) : 0;
-        }
+        $countReussite = $excellent + $bien + $assezBien + $passable;
+        $countReussiteFilles = count(array_filter($notesFilles, function($n) { return $n >= 10; }));
+        $countReussiteGarcons = count(array_filter($notesGarcons, function($n) { return $n >= 10; }));
         
         // Stats complémentaires: min, max, écart-type
         $minNote = !empty($notes) ? min($notes) : 0;
@@ -882,25 +867,24 @@ public function analyseDisciples(Request $request)
             foreach ($notes as $note) {
                 $sumSqDiff += pow($note - $moyenneGenerale, 2);
             }
-            $ecartType = round(sqrt($sumSqDiff / count($notes)), 2);
+            $ecartType = sqrt($sumSqDiff / count($notes));
         }
         
-        // Construire l'objet de détails de la discipline
         $disciplineDetails = [
             'nom' => $discipline,
             'nb_eleves' => count($notes),
             'nb_filles' => count($notesFilles),
             'nb_garcons' => count($notesGarcons),
-            'moyenne_generale' => round($moyenneGenerale, 2),
-            'moyenne_filles' => round($moyenneFilles, 2),
-            'moyenne_garcons' => round($moyenneGarcons, 2),
+            'moyenne_generale' => $moyenneGenerale,
+            'moyenne_filles' => $moyenneFilles,
+            'moyenne_garcons' => $moyenneGarcons,
             'distribution' => $distribution,
             'reussite' => $totalNotes > 0 ? round(($countReussite / $totalNotes) * 100) : 0,
             'reussite_filles' => count($notesFilles) > 0 ? round(($countReussiteFilles / count($notesFilles)) * 100) : 0,
             'reussite_garcons' => count($notesGarcons) > 0 ? round(($countReussiteGarcons / count($notesGarcons)) * 100) : 0,
             'min_note' => $minNote,
             'max_note' => $maxNote,
-            'ecart_type' => $ecartType,
+            'ecart_type' => round($ecartType, 2),
             'classes' => $discData['classes'],
             'niveaux' => $discData['niveaux'],
             'eleves' => $discData['eleves']
