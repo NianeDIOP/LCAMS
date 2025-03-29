@@ -644,10 +644,361 @@ private function exportDashboardAsImage(Request $request, array $data)
     /**
      * Affiche la page d'analyse des disciplines
      */
-    public function analyseDisciples()
-    {
-        return view('semestre1.analyse');
+    /**
+ * Affiche la page d'analyse des disciplines du semestre 1
+ * en utilisant les données du 3ème onglet déjà extraites
+ * 
+ * @param Request $request
+ * @return \Illuminate\Contracts\View\View
+ */
+public function analyseDisciples(Request $request)
+{
+    // 1. Récupération des paramètres de filtrage
+    $niveau_id = $request->input('niveau_id');
+    $classe_id = $request->input('classe_id');
+    $discipline = $request->input('discipline');
+    $sexe = $request->input('sexe');
+    $min_moyenne = $request->input('min_moyenne');
+    $max_moyenne = $request->input('max_moyenne');
+
+    // 2. Récupérer tous les niveaux et classes pour les filtres
+    $niveaux = DB::table('niveaux')->orderBy('ordre')->get();
+    $classes = [];
+    
+    if ($niveau_id) {
+        $classes = DB::table('classes')
+            ->where('niveau_id', $niveau_id)
+            ->where('active', 1)
+            ->orderBy('nom')
+            ->get();
     }
+
+    // 3. Récupérer les fichiers importés
+    $filesQuery = DB::table('imported_files')
+        ->where('semestre', 1)
+        ->orderBy('created_at', 'desc');
+    
+    if ($niveau_id) {
+        $filesQuery->where('niveau_id', $niveau_id);
+    }
+    
+    if ($classe_id) {
+        $filesQuery->where('classe_id', $classe_id);
+    }
+    
+    $importedFiles = $filesQuery->get();
+
+    // 4. Extraire les disciplines de tous les fichiers importés
+    $allDisciplines = [];
+    $disciplinesData = [];
+
+    foreach ($importedFiles as $file) {
+        try {
+            $filePath = Storage::path($file->chemin);
+            if (!file_exists($filePath)) {
+                continue; // Fichier manquant, passer au suivant
+            }
+            
+            $spreadsheet = IOFactory::load($filePath);
+            
+            // Vérifier si le 3ème onglet existe 
+            if ($spreadsheet->getSheetCount() < 3) {
+                continue; // Pas assez d'onglets, passer au suivant
+            }
+            
+            // Récupérer le 3ème onglet (index 2) qui contient les matières/disciplines
+            $worksheet = $spreadsheet->getSheet(2);
+            $highestColumn = $worksheet->getHighestColumn();
+            $highestRow = $worksheet->getHighestRow();
+            
+            // Extraire les entêtes pour identifier les disciplines (en évitant les colonnes non pertinentes)
+            $headers = [];
+            $disciplineColumns = [];
+            
+            for ($col = 'A'; $col <= $highestColumn; $col++) {
+                $cellValue = $worksheet->getCell($col . '1')->getValue();
+                if (!empty($cellValue)) {
+                    $headers[$col] = $cellValue;
+                    
+                    // Ajouter aux disciplines (en excluant les colonnes non disciplinaires)
+                    if (!in_array($cellValue, ['IEN', 'Prenom', 'Nom', 'Sexe', 'Moy.', 'Rang', 'Appréciations', 'Total'])) {
+                        $allDisciplines[$cellValue] = 0; // Initialiser le compteur
+                        $disciplineColumns[$cellValue] = $col;
+                    }
+                }
+            }
+            
+            // Récupérer les noms des élèves et leur sexe depuis le premier onglet 
+            $firstSheet = $spreadsheet->getSheet(0);
+            $studentsInfo = [];
+            
+            for ($row = 2; $row <= $firstSheet->getHighestRow(); $row++) {
+                $ien = $firstSheet->getCell('A' . $row)->getValue();
+                if (!empty($ien)) {
+                    $sexeValue = $firstSheet->getCell('D' . $row)->getValue();
+                    // Normaliser le sexe
+                    if ($sexeValue) {
+                        $sexeValue = strtoupper($sexeValue);
+                        if (in_array($sexeValue, ['M', 'G'])) {
+                            $sexeValue = 'H';
+                        }
+                    }
+                    
+                    $studentsInfo[$ien] = [
+                        'prenom' => $firstSheet->getCell('B' . $row)->getValue(),
+                        'nom' => $firstSheet->getCell('C' . $row)->getValue(),
+                        'sexe' => $sexeValue
+                    ];
+                }
+            }
+            
+            // Extraire les données par discipline
+            for ($row = 3; $row <= $highestRow; $row++) {
+                $ien = $worksheet->getCell('A' . $row)->getValue();
+                if (empty($ien) || !isset($studentsInfo[$ien])) continue;
+                
+                // Vérifier le sexe si un filtre est appliqué
+                if ($sexe && $studentsInfo[$ien]['sexe'] != $sexe) continue;
+                
+                // Parcourir toutes les disciplines
+                foreach ($disciplineColumns as $discName => $discCol) {
+                    $note = $worksheet->getCell($discCol . $row)->getValue();
+                    if (is_numeric($note)) {
+                        $note = floatval(str_replace(',', '.', $note));
+                        
+                        // Appliquer le filtre min/max moyenne si nécessaire
+                        if (($min_moyenne !== null && $note < floatval($min_moyenne)) || 
+                            ($max_moyenne !== null && $note > floatval($max_moyenne))) {
+                            continue;
+                        }
+                        
+                        // Incrémenter le compteur de la discipline
+                        $allDisciplines[$discName]++;
+                        
+                        // Stocker les données pour l'analyse
+                        if (!isset($disciplinesData[$discName])) {
+                            $disciplinesData[$discName] = [
+                                'nom' => $discName,
+                                'notes' => [],
+                                'notes_filles' => [],
+                                'notes_garcons' => [],
+                                'eleves' => [],
+                                'effectif' => 0,
+                                'classes' => [],
+                                'niveaux' => []
+                            ];
+                        }
+                        
+                        // Ajouter la note à la discipline
+                        $disciplinesData[$discName]['notes'][] = $note;
+                        $disciplinesData[$discName]['effectif']++;
+                        
+                        // Ajouter les infos de l'élève
+                        $disciplinesData[$discName]['eleves'][] = [
+                            'ien' => $ien,
+                            'prenom' => $studentsInfo[$ien]['prenom'],
+                            'nom' => $studentsInfo[$ien]['nom'],
+                            'sexe' => $studentsInfo[$ien]['sexe'],
+                            'note' => $note
+                        ];
+                        
+                        // Ajouter par sexe
+                        if ($studentsInfo[$ien]['sexe'] == 'F') {
+                            $disciplinesData[$discName]['notes_filles'][] = $note;
+                        } else if ($studentsInfo[$ien]['sexe'] == 'H') {
+                            $disciplinesData[$discName]['notes_garcons'][] = $note;
+                        }
+                        
+                        // Ajouter les classes et niveaux
+                        $classeId = $file->classe_id;
+                        $niveauId = $file->niveau_id;
+                        
+                        if (!isset($disciplinesData[$discName]['classes'][$classeId])) {
+                            $classeInfo = DB::table('classes')->find($classeId);
+                            $disciplinesData[$discName]['classes'][$classeId] = [
+                                'id' => $classeId,
+                                'nom' => $classeInfo ? $classeInfo->nom : 'Classe ' . $classeId,
+                                'notes' => [],
+                                'effectif' => 0
+                            ];
+                        }
+                        
+                        $disciplinesData[$discName]['classes'][$classeId]['notes'][] = $note;
+                        $disciplinesData[$discName]['classes'][$classeId]['effectif']++;
+                        
+                        if (!isset($disciplinesData[$discName]['niveaux'][$niveauId])) {
+                            $niveauInfo = DB::table('niveaux')->find($niveauId);
+                            $disciplinesData[$discName]['niveaux'][$niveauId] = [
+                                'id' => $niveauId,
+                                'nom' => $niveauInfo ? $niveauInfo->nom : 'Niveau ' . $niveauId,
+                                'code' => $niveauInfo ? $niveauInfo->code : 'N/A',
+                                'notes' => [],
+                                'effectif' => 0
+                            ];
+                        }
+                        
+                        $disciplinesData[$discName]['niveaux'][$niveauId]['notes'][] = $note;
+                        $disciplinesData[$discName]['niveaux'][$niveauId]['effectif']++;
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            Log::error('Erreur lors de l\'analyse du fichier ' . ($file->nom_fichier ?? 'inconnu') . ': ' . $e->getMessage());
+            continue;
+        }
+    }
+
+    // 5. Trier les disciplines par fréquence et supprimer celles sans données
+    arsort($allDisciplines);
+    foreach ($allDisciplines as $discName => $count) {
+        if ($count == 0) {
+            unset($allDisciplines[$discName]);
+        }
+    }
+
+    // 6. Analyser la discipline sélectionnée en détail
+    $disciplineDetails = null;
+    
+    if ($discipline && isset($disciplinesData[$discipline])) {
+        $discData = $disciplinesData[$discipline];
+        
+        // Calculer les statistiques
+        $notes = $discData['notes'];
+        $notesFilles = $discData['notes_filles'];
+        $notesGarcons = $discData['notes_garcons'];
+        
+        // Moyenne générale et par sexe
+        $moyenneGenerale = !empty($notes) ? array_sum($notes) / count($notes) : 0;
+        $moyenneFilles = !empty($notesFilles) ? array_sum($notesFilles) / count($notesFilles) : 0;
+        $moyenneGarcons = !empty($notesGarcons) ? array_sum($notesGarcons) / count($notesGarcons) : 0;
+        
+        // Répartition par catégorie
+        $distribution = [
+            'excellent' => 0,  // >= 16
+            'bien' => 0,       // 14-15.99
+            'assez_bien' => 0, // 12-13.99
+            'passable' => 0,   // 10-11.99
+            'insuffisant' => 0 // < 10
+        ];
+        
+        $countReussite = 0;
+        $countReussiteFilles = 0;
+        $countReussiteGarcons = 0;
+        
+        foreach ($notes as $note) {
+            if ($note >= 16) {
+                $distribution['excellent']++;
+            } elseif ($note >= 14) {
+                $distribution['bien']++;
+            } elseif ($note >= 12) {
+                $distribution['assez_bien']++;
+            } elseif ($note >= 10) {
+                $distribution['passable']++;
+            } else {
+                $distribution['insuffisant']++;
+            }
+            
+            if ($note >= 10) {
+                $countReussite++;
+            }
+        }
+        
+        foreach ($notesFilles as $note) {
+            if ($note >= 10) {
+                $countReussiteFilles++;
+            }
+        }
+        
+        foreach ($notesGarcons as $note) {
+            if ($note >= 10) {
+                $countReussiteGarcons++;
+            }
+        }
+        
+        // Convertir la distribution en pourcentages
+        $totalNotes = count($notes);
+        if ($totalNotes > 0) {
+            foreach ($distribution as $key => $value) {
+                $distribution[$key] = round(($value / $totalNotes) * 100);
+            }
+        }
+        
+        // Calculer les moyennes par classe et niveau
+        foreach ($discData['classes'] as $classeId => &$classeData) {
+            $classeData['moyenne'] = !empty($classeData['notes']) ? 
+                round(array_sum($classeData['notes']) / count($classeData['notes']), 2) : 0;
+        }
+        
+        foreach ($discData['niveaux'] as $niveauId => &$niveauData) {
+            $niveauData['moyenne'] = !empty($niveauData['notes']) ? 
+                round(array_sum($niveauData['notes']) / count($niveauData['notes']), 2) : 0;
+        }
+        
+        // Construire l'objet de détails de la discipline
+        $disciplineDetails = [
+            'nom' => $discipline,
+            'effectif' => count($notes),
+            'effectif_filles' => count($notesFilles),
+            'effectif_garcons' => count($notesGarcons),
+            'moyenne_generale' => round($moyenneGenerale, 2),
+            'moyenne_filles' => round($moyenneFilles, 2),
+            'moyenne_garcons' => round($moyenneGarcons, 2),
+            'distribution' => $distribution,
+            'reussite' => $totalNotes > 0 ? round(($countReussite / $totalNotes) * 100) : 0,
+            'reussite_filles' => count($notesFilles) > 0 ? round(($countReussiteFilles / count($notesFilles)) * 100) : 0,
+            'reussite_garcons' => count($notesGarcons) > 0 ? round(($countReussiteGarcons / count($notesGarcons)) * 100) : 0,
+            'min_note' => !empty($notes) ? min($notes) : 0,
+            'max_note' => !empty($notes) ? max($notes) : 0,
+            'classes' => $discData['classes'],
+            'niveaux' => $discData['niveaux'],
+            'eleves' => $discData['eleves']
+        ];
+    }
+
+    // 7. Récupérer la moyenne générale pour comparaison
+    $moyenneGeneraleQuery = DB::table('excel_data')
+        ->join('imported_files', 'excel_data.file_id', '=', 'imported_files.id')
+        ->where('imported_files.semestre', 1)
+        ->whereRaw('JSON_VALID(data)')
+        ->select(DB::raw('AVG(CAST(REPLACE(JSON_EXTRACT(data, "$[9]"), ",", ".") AS DECIMAL(10,2))) as moyenne_generale'));
+    
+    if ($niveau_id) {
+        $moyenneGeneraleQuery->where('imported_files.niveau_id', $niveau_id);
+    }
+    
+    if ($classe_id) {
+        $moyenneGeneraleQuery->where('imported_files.classe_id', $classe_id);
+    }
+    
+    if ($sexe) {
+        // Filtrer par sexe en utilisant les données JSON (colonne 3 = sexe)
+        $moyenneGeneraleQuery->where(function($query) use ($sexe) {
+            if ($sexe == 'F') {
+                $query->whereRaw('JSON_EXTRACT(data, "$[3]") IN ("F", "f")');
+            } else {
+                $query->whereRaw('JSON_EXTRACT(data, "$[3]") IN ("H", "h", "M", "m", "G", "g")');
+            }
+        });
+    }
+    
+    $globalStats = $moyenneGeneraleQuery->first();
+
+    // 8. Retourner la vue avec les données
+    return view('semestre1.analyse', compact(
+        'niveaux',
+        'classes',
+        'importedFiles',
+        'allDisciplines',
+        'discipline',
+        'disciplineDetails',
+        'globalStats',
+        'niveau_id',
+        'classe_id',
+        'sexe',
+        'min_moyenne',
+        'max_moyenne'
+    ));
+}
 
     /**
      * Affiche la page des rapports
