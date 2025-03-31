@@ -42,6 +42,9 @@ Route::get('/semestre1/analyse-disciplines', [Semestre1Controller::class, 'analy
 Route::get('/semestre1/disciplines-classe', [Semestre1Controller::class, 'getDisciplinesClasse'])->name('semestre1.disciplines-classe');
 Route::get('/semestre1/rapports', [Semestre1Controller::class, 'rapports'])->name('semestre1.rapports');
 Route::get('/semestre1/rapport-classe/{classe_id}', [Semestre1Controller::class, 'genererRapportClasse'])->name('semestre1.rapport-classe');
+Route::get('/semestre1/eleves', [Semestre1Controller::class, 'eleves'])->name('semestre1.eleves');
+Route::get('/semestre1/eleve/{id}', [Semestre1Controller::class, 'eleveDetails'])->name('semestre1.eleve-details');
+Route::get('/semestre1/eleves/export/pdf', [Semestre1Controller::class, 'exportPdf'])->name('semestre1.eleves.export.pdf');
 
 // Routes pour l'importation du Semestre 1
 Route::get('/importation/semestre1', [ImportationController::class, 'indexS1'])->name('importation.s1');
@@ -55,6 +58,7 @@ Route::get('/semestre2/analyse-disciplines', [Semestre2Controller::class, 'analy
 Route::get('/semestre2/disciplines-classe', [Semestre2Controller::class, 'getDisciplinesClasse'])->name('semestre2.disciplines-classe');
 Route::get('/semestre2/rapports', [Semestre2Controller::class, 'rapports'])->name('semestre2.rapports');
 Route::get('/semestre2/rapport-classe/{classe_id}', [Semestre2Controller::class, 'genererRapportClasse'])->name('semestre2.rapport-classe');
+
 
 // Routes pour l'importation du Semestre 2
 Route::get('/importation/semestre2', [ImportationController::class, 'indexS2'])->name('importation.s2');

@@ -39,6 +39,13 @@
         <span>Importation</span>
     </a>
 </li>
+<!-- Ajoutez cet élément de menu juste avant le lien des rapports -->
+<li class="nav-item">
+    <a class="nav-link {{ request()->routeIs('semestre1.eleves') ? 'active' : '' }}" href="{{ route('semestre1.eleves') }}">
+        <span class="nav-icon"><i class="fas fa-user-graduate"></i></span>
+        <span>Liste des élèves</span>
+    </a>
+</li>
 
 <div class="nav-title">Autres Modules</div>
 

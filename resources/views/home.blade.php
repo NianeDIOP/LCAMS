@@ -15,9 +15,6 @@
                     <a href="{{ route('importation.s1') }}" class="btn btn-outline-light btn-lg">Importer des données</a>
                 </div>
             </div>
-            <div class="col-lg-6 d-none d-lg-block">
-                <img src="https://via.placeholder.com/600x400" alt="LCAMS Dashboard" class="img-fluid rounded shadow">
-            </div>
         </div>
     </div>
 </section>
