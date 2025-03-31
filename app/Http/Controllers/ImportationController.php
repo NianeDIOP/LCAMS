@@ -524,6 +524,317 @@ class ImportationController extends Controller
             return redirect()->back()->with('error', 'Erreur lors de l\'importation: ' . $e->getMessage());
         }
     }
+
+    // Ajoutez cette nouvelle méthode au contrôleur ImportationController
+
+/**
+ * Convertit les données prévisualisées en données stockées dans la base de données
+ */
+public function convertPreviewToData($id)
+{
+    $import = ImportHistory::with(['niveau', 'classe', 'anneeScolaire'])->findOrFail($id);
+    
+    try {
+        // Vérifier si l'importation est déjà complète
+        if ($import->statut === 'complet') {
+            return redirect()->route('semestre1.donnees-detaillees', ['classe_id' => $import->classe_id])
+                ->with('info', 'Les données de cette importation sont déjà enregistrées dans la base de données.');
+        }
+        
+        DB::beginTransaction();
+        
+        $filePath = Storage::path($import->fichier_stocke);
+        $spreadsheet = IOFactory::load($filePath);
+        
+        // Récupérer l'onglet "Moyennes eleves"
+        $moyennesSheet = $spreadsheet->getSheet(0)->toArray();
+        $moyennesHeaders = $moyennesSheet[0];
+        $moyennesData = array_slice($moyennesSheet, 1);
+        
+        // Récupérer l'onglet "Données détaillées"
+        $detailsSheet = $spreadsheet->getSheet(1)->toArray();
+        $detailsHeaders = $detailsSheet[0];
+        $detailsData = array_slice($detailsSheet, 1);
+        
+        $anneeScolaireActive = AnneeScolaire::where('active', true)->first();
+        if (!$anneeScolaireActive) {
+            throw new \Exception('Aucune année scolaire active trouvée.');
+        }
+        
+        $classe = Classe::findOrFail($import->classe_id);
+        $elevesCount = 0;
+        $disciplinesCount = 0;
+        
+        // Traiter les données des élèves (moyennes générales)
+        foreach ($moyennesData as $rowData) {
+            if (empty($rowData[0])) continue; // Ignorer les lignes vides
+            
+            // Vérifiez si l'élève existe déjà
+            $eleve = Eleve::where('ien', $rowData[0])
+                        ->where('annee_scolaire_id', $anneeScolaireActive->id)
+                        ->first();
+                        
+            if (!$eleve) {
+                // Créer un nouvel élève
+                $eleve = new Eleve();
+                $eleve->ien = $rowData[0];
+                $eleve->prenom = $rowData[1] ?? '';
+                $eleve->nom = $rowData[2] ?? '';
+                
+                // Conversion du sexe: H (Homme) vers M (Masculin)
+                $sexe = $rowData[3] ?? '';
+                if ($sexe === 'H') {
+                    $sexe = 'M';
+                } elseif ($sexe === 'F') {
+                    // F reste F, pas besoin de conversion
+                    $sexe = 'F';
+                } else {
+                    // Pour les autres valeurs, utiliser M par défaut
+                    $sexe = 'M';
+                }
+                $eleve->sexe = $sexe;
+                
+                // Correction pour la date de naissance
+                $dateValue = $rowData[4] ?? null;
+                if (!empty($dateValue)) {
+                    if (is_numeric($dateValue)) {
+                        $eleve->date_naissance = \PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject($dateValue)->format('Y-m-d');
+                    } else {
+                        // Tentative de conversion de chaîne en date
+                        try {
+                            $eleve->date_naissance = Carbon::parse($dateValue)->format('Y-m-d');
+                        } catch (\Exception $e) {
+                            $eleve->date_naissance = null;
+                        }
+                    }
+                } else {
+                    $eleve->date_naissance = null;
+                }
+                
+                $eleve->lieu_naissance = $rowData[5] ?? '';
+                $eleve->classe_id = $classe->id;
+                $eleve->annee_scolaire_id = $anneeScolaireActive->id;
+                $eleve->save();
+                
+                $elevesCount++;
+            }
+            
+            // Récupérer les valeurs des données
+            $moyenne = isset($rowData[9]) && is_numeric($rowData[9]) ? $rowData[9] : null;
+            $rang = isset($rowData[10]) && is_numeric($rowData[10]) ? $rowData[10] : null;
+            $decision = isset($rowData[11]) && !empty($rowData[11]) ? $rowData[11] : $this->determinerDecisionConseil($moyenne);
+            $appreciation = isset($rowData[12]) && !empty($rowData[12]) ? $rowData[12] : $this->determinerAppreciation($moyenne);
+            $observation = isset($rowData[13]) ? $rowData[13] : '';
+
+            // Créer ou mettre à jour la moyenne générale en fonction du semestre
+            if ($import->semestre == 1) {
+                MoyenneGeneraleS1::updateOrCreate(
+                    [
+                        'eleve_id' => $eleve->id,
+                        'annee_scolaire_id' => $anneeScolaireActive->id
+                    ],
+                    [
+                        'retard' => $rowData[6] ?? '',
+                        'absence' => $rowData[7] ?? '',
+                        'conseil_discipline' => $rowData[8] ?? '',
+                        'moyenne' => $moyenne,
+                        'rang' => $rang,
+                        'decision' => $decision,
+                        'appreciation' => $appreciation,
+                        'observation' => $observation
+                    ]
+                );
+            } else {
+                MoyenneGeneraleS2::updateOrCreate(
+                    [
+                        'eleve_id' => $eleve->id,
+                        'annee_scolaire_id' => $anneeScolaireActive->id
+                    ],
+                    [
+                        'retard' => $rowData[6] ?? '',
+                        'absence' => $rowData[7] ?? '',
+                        'conseil_discipline' => $rowData[8] ?? '',
+                        'moyenne' => $moyenne,
+                        'rang' => $rang,
+                        'decision' => $decision,
+                        'appreciation' => $appreciation,
+                        'observation' => $observation
+                    ]
+                );
+            }
+        }
+        
+        // Identifier les colonnes de disciplines
+        $headers = $detailsHeaders;
+        $disciplinesMap = [];
+        $currentDiscipline = null;
+        
+        // Parcourir les en-têtes pour identifier les disciplines
+        for ($j = 3; $j < count($headers); $j++) {
+            if (!empty($headers[$j]) && $headers[$j] != 'Moy DD' && $headers[$j] != 'Comp D' && $headers[$j] != 'Moy D' && $headers[$j] != 'Rang D') {
+                // Nouvelle discipline principale ou sous-discipline
+                $disciplinesCount++;
+                
+                if (strpos($headers[$j], '[') !== false) {
+                    // Sous-discipline
+                    $parts = explode('[', $headers[$j]);
+                    $disciplinePrincipale = trim($parts[0]);
+                    $sousDiscipline = trim(str_replace(']', '', $parts[1]));
+                    
+                    // Vérifier si la discipline principale existe
+                    $disciplineParent = Discipline::where('libelle', $disciplinePrincipale)
+                                               ->where('type', 'principale')
+                                               ->first();
+                                               
+                    if (!$disciplineParent) {
+                        $disciplineParent = new Discipline();
+                        $disciplineParent->libelle = $disciplinePrincipale;
+                        $disciplineParent->type = 'principale';
+                        $disciplineParent->save();
+                    }
+                    
+                    // Créer ou trouver la sous-discipline
+                    $discipline = Discipline::where('libelle', $sousDiscipline)
+                                          ->where('discipline_parent_id', $disciplineParent->id)
+                                          ->first();
+                                          
+                    if (!$discipline) {
+                        $discipline = new Discipline();
+                        $discipline->libelle = $sousDiscipline;
+                        $discipline->type = 'sous-discipline';
+                        $discipline->discipline_parent_id = $disciplineParent->id;
+                        $discipline->save();
+                    }
+                    
+                    $currentDiscipline = $discipline->id;
+                } else {
+                    // Discipline principale
+                    $discipline = Discipline::where('libelle', $headers[$j])
+                                          ->where('type', 'principale')
+                                          ->first();
+                                          
+                    if (!$discipline) {
+                        $discipline = new Discipline();
+                        $discipline->libelle = $headers[$j];
+                        $discipline->type = 'principale';
+                        $discipline->save();
+                    }
+                    
+                    $currentDiscipline = $discipline->id;
+                }
+            }
+            
+            $columnType = '';
+            if (!empty($headers[$j])) {
+                if ($headers[$j] == 'Moy DD') $columnType = 'moy_dd';
+                else if ($headers[$j] == 'Comp D') $columnType = 'comp_d';
+                else if ($headers[$j] == 'Moy D') $columnType = 'moy_d';
+                else if ($headers[$j] == 'Rang D') $columnType = 'rang_d';
+            }
+            
+            if ($columnType && $currentDiscipline) {
+                $disciplinesMap[$j] = [
+                    'discipline_id' => $currentDiscipline,
+                    'type' => $columnType
+                ];
+            }
+        }
+        
+        // Traiter les notes des élèves
+        $notesCreees = 0;
+        
+        foreach ($detailsData as $rowData) {
+            if (empty($rowData[0])) continue; // Ignorer les lignes vides
+            
+            $eleve = Eleve::where('ien', $rowData[0])
+                        ->where('annee_scolaire_id', $anneeScolaireActive->id)
+                        ->first();
+                        
+            if (!$eleve) continue; // Élève non trouvé
+            
+            $notesParDiscipline = [];
+            
+            // Parcourir les colonnes pour trouver les notes
+            foreach ($disciplinesMap as $colIndex => $mapInfo) {
+                $discipline_id = $mapInfo['discipline_id'];
+                $type = $mapInfo['type'];
+                $valeur = isset($rowData[$colIndex]) ? $rowData[$colIndex] : null;
+                
+                if (!isset($notesParDiscipline[$discipline_id])) {
+                    $notesParDiscipline[$discipline_id] = [
+                        'moy_dd' => null,
+                        'comp_d' => null,
+                        'moy_d' => null,
+                        'rang_d' => null
+                    ];
+                }
+                
+                $notesParDiscipline[$discipline_id][$type] = $valeur;
+            }
+            
+            // Enregistrer ou mettre à jour les notes pour chaque discipline
+            foreach ($notesParDiscipline as $discipline_id => $notes) {
+                try {
+                    if ($import->semestre == 1) {
+                        $note = NoteS1::updateOrCreate(
+                            [
+                                'eleve_id' => $eleve->id,
+                                'discipline_id' => $discipline_id,
+                                'annee_scolaire_id' => $anneeScolaireActive->id
+                            ],
+                            [
+                                'moy_dd' => $notes['moy_dd'],
+                                'comp_d' => $notes['comp_d'],
+                                'moy_d' => $notes['moy_d'],
+                                'rang_d' => $notes['rang_d']
+                            ]
+                        );
+                    } else {
+                        $note = NoteS2::updateOrCreate(
+                            [
+                                'eleve_id' => $eleve->id,
+                                'discipline_id' => $discipline_id,
+                                'annee_scolaire_id' => $anneeScolaireActive->id
+                            ],
+                            [
+                                'moy_dd' => $notes['moy_dd'],
+                                'comp_d' => $notes['comp_d'],
+                                'moy_d' => $notes['moy_d'],
+                                'rang_d' => $notes['rang_d']
+                            ]
+                        );
+                    }
+                    
+                    $notesCreees++;
+                } catch (\Exception $e) {
+                    throw $e; // Relancer l'exception pour sortir de la transaction
+                }
+            }
+        }
+        
+        // Mettre à jour l'historique d'importation
+        $import->update([
+            'nb_eleves' => $elevesCount,
+            'nb_disciplines' => $disciplinesCount,
+            'statut' => 'complet',
+            'resume' => [
+                'nb_eleves' => $elevesCount,
+                'nb_disciplines' => $disciplinesCount,
+                'date_import' => now()->format('d/m/Y H:i:s')
+            ]
+        ]);
+        
+        DB::commit();
+        
+        // Rediriger vers la page de données détaillées avec la classe sélectionnée
+        return redirect()->route('semestre1.donnees-detaillees', ['classe_id' => $import->classe_id])
+            ->with('success', 'Les données prévisualisées ont été converties et enregistrées avec succès.');
+        
+    } catch (\Exception $e) {
+        DB::rollBack();
+        return redirect()->back()->with('error', 'Erreur lors de la conversion des données: ' . $e->getMessage());
+    }
+}
     /**
      * Importe les données du fichier Excel pour le semestre 2
      */

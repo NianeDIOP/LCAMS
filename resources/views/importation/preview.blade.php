@@ -276,6 +276,12 @@
     <a href="{{ $import->semestre == 1 ? route('importation.s1') : route('importation.s2') }}" class="btn btn-secondary">
         <i class="fas fa-arrow-left me-2"></i>Retour
     </a>
+    
+    <a href="{{ route('importation.convert-preview', $import->id) }}" class="btn btn-warning text-white me-2">
+        <i class="fas fa-database me-2"></i>Convertir et enregistrer en base de données
+    </a>
+ 
+    
     <a href="{{ $import->semestre == 1 ? route('semestre1.index') : route('semestre2.index') }}" class="btn btn-primary">
         <i class="fas fa-chart-pie me-2"></i>Voir le tableau de bord
     </a>

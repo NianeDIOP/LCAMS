@@ -1,6 +1,6 @@
 @extends('layouts.module')
 
-@section('title', 'Semestre 1 - Données détaillées')
+@section('title', 'Semestre 1 - Édition des données détaillées')
 
 @section('sidebar')
 <div class="nav-title">Semestre 1</div>
@@ -80,9 +80,9 @@
 
 @section('content')
 <h1 class="page-title">
-    <i class="fas fa-table me-2"></i>Données détaillées - Semestre 1
+    <i class="fas fa-edit me-2"></i>Édition des données détaillées - Semestre 1
 </h1>
-<p class="page-subtitle">Consultez les notes détaillées par discipline pour le premier semestre de l'année scolaire {{ $anneeScolaireActive->libelle }}.</p>
+<p class="page-subtitle">Modifiez les notes détaillées par discipline pour le premier semestre de l'année scolaire {{ $anneeScolaireActive->libelle }}.</p>
 
 <!-- Filtres -->
 <div class="card mb-3">
@@ -97,7 +97,7 @@
         </div>
     </div>
     <div class="card-body p-3 collapse show" id="filterCollapse">
-        <form action="{{ route('semestre1.donnees-detaillees') }}" method="GET" id="filter-form">
+        <form action="{{ route('semestre1.donnees-detaillees.edit') }}" method="GET" id="filter-form">
             <div class="row g-2 mb-2">
                 <div class="col-md-4">
                     <label for="niveau_id" class="form-label small">Niveau</label>
@@ -117,21 +117,7 @@
                         @endforeach
                     </select>
                 </div>
-                <div class="col-md-4">
-                    <label for="sort_by" class="form-label small">Trier par</label>
-                    <select class="form-select form-select-sm" id="sort_by" name="sort_by">
-                        <option value="nom" {{ request('sort_by') == 'nom' ? 'selected' : '' }}>Nom</option>
-                        <option value="moyenne_desc" {{ request('sort_by') == 'moyenne_desc' ? 'selected' : '' }}>Moyenne (décroissante)</option>
-                        <option value="moyenne_asc" {{ request('sort_by') == 'moyenne_asc' ? 'selected' : '' }}>Moyenne (croissante)</option>
-                    </select>
-                </div>
-            </div>
-            
-            <div class="row g-2">
-                <div class="col-md-12 d-flex justify-content-end">
-                    <button type="reset" class="btn btn-sm btn-secondary me-1">
-                        <i class="fas fa-undo me-1"></i>Réinitialiser
-                    </button>
+                <div class="col-md-4 d-flex justify-content-end align-items-end">
                     <button type="submit" class="btn btn-sm btn-primary">
                         <i class="fas fa-search me-1"></i>Filtrer
                     </button>
@@ -141,135 +127,147 @@
     </div>
 </div>
 
-<!-- Données détaillées -->
-<div class="card">
-    <div class="card-header header-success d-flex justify-content-between align-items-center">
-        <div>
-            <i class="fas fa-table me-2"></i>Notes détaillées par discipline ({{ $eleves->total() }} élèves)
+@if(!$classe_id)
+    <div class="alert alert-info">
+        <i class="fas fa-info-circle me-2"></i>Veuillez sélectionner une classe pour éditer les données détaillées.
+    </div>
+@else
+    <!-- Instructions pour copier-coller -->
+    <div class="alert alert-info">
+        <h5><i class="fas fa-clipboard me-2"></i>Copier-coller depuis Excel</h5>
+        <p>Vous pouvez copier une colonne depuis Excel et coller les valeurs dans les champs correspondants.</p>
+        <p><strong>Astuce :</strong> Utilisez la touche Tab pour naviguer facilement entre les champs.</p>
+    </div>
+
+    <!-- Sélecteur de discipline pour affichage simplifié -->
+    <div class="card mb-3">
+        <div class="card-header header-warning">
+            <i class="fas fa-table me-2"></i>Sélectionner une discipline à éditer
         </div>
-        <div>
-            <a href="{{ route('semestre1.donnees-detaillees.edit') }}" class="btn btn-sm btn-success me-2">
-                <i class="fas fa-edit me-1"></i>Éditer les données
-            </a>
-            <button type="button" class="btn btn-sm btn-danger" id="export-pdf-btn">
-                <i class="fas fa-file-pdf me-1"></i>Exporter en PDF
-            </button>
+        <div class="card-body">
+            <select class="form-select" id="discipline-selector">
+                <option value="">Toutes les disciplines</option>
+                @foreach($disciplines as $discipline)
+                    <option value="{{ $discipline->id }}">{{ $discipline->libelle }}</option>
+                @endforeach
+            </select>
         </div>
     </div>
-    <div class="card-body p-0">
-        <div class="table-responsive">
-            <table class="table table-bordered table-sm m-0">
-                <thead>
-                    <tr>
-                        <th class="text-center align-middle" rowspan="2">IEN</th>
-                        <th class="text-center align-middle" rowspan="2">Prénom</th>
-                        <th class="text-center align-middle" rowspan="2">Nom</th>
-                        <th class="text-center align-middle" rowspan="2">Sexe</th>
-                        
-                        @foreach($disciplines as $discipline)
-                            <th class="text-center" colspan="4">{{ $discipline->libelle }}</th>
-                        @endforeach
-                    </tr>
-                    <tr>
-                        @foreach($disciplines as $discipline)
-                            <th class="text-center">Moy DD</th>
-                            <th class="text-center">Comp D</th>
-                            <th class="text-center bg-light">Moy D</th>
-                            <th class="text-center">Rang D</th>
-                        @endforeach
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse($eleves as $eleve)
-                    <tr>
-                        <td>{{ $eleve->ien }}</td>
-                        <td>{{ $eleve->prenom }}</td>
-                        <td>{{ $eleve->nom }}</td>
-                        <td>{{ $eleve->sexe }}</td>
-                        
-                        @foreach($disciplines as $discipline)
-                            @php
-                                $donnee_moy_dd = $donnees[$eleve->id][$discipline->id]['moy_dd'] ?? null;
-                                $donnee_comp_d = $donnees[$eleve->id][$discipline->id]['comp_d'] ?? null;
-                                $donnee_moy_d = $donnees[$eleve->id][$discipline->id]['moy_d'] ?? null;
-                                $donnee_rang_d = $donnees[$eleve->id][$discipline->id]['rang_d'] ?? null;
-                                
-                                $moyDDValue = $donnee_moy_dd !== null ? number_format($donnee_moy_dd, 2) : '-';
-                                $compDValue = $donnee_comp_d !== null ? number_format($donnee_comp_d, 2) : '-';
-                                $moyDValue = $donnee_moy_d !== null ? number_format($donnee_moy_d, 2) : '-';
-                                $rangDValue = $donnee_rang_d !== null ? $donnee_rang_d : '-';
-                                
-                                $textClass = $donnee_moy_d !== null ? ($donnee_moy_d >= 10 ? 'text-success' : 'text-danger') : '';
-                            @endphp
-                            
-                            <td class="text-center">{{ $moyDDValue }}</td>
-                            <td class="text-center">{{ $compDValue }}</td>
-                            <td class="text-center bg-light {{ $textClass }} fw-bold">{{ $moyDValue }}</td>
-                            <td class="text-center">{{ $rangDValue }}</td>
-                        @endforeach
-                    </tr>
-                    @empty
-                    <tr>
-                        <td colspan="{{ 4 + (count($disciplines) * 4) }}" class="text-center">Aucun élève trouvé pour les critères sélectionnés.</td>
-                    </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
+
+    <!-- Formulaire d'édition des données -->
+    <form action="{{ route('semestre1.donnees-detaillees.store') }}" method="POST" id="edit-form">
+        @csrf
+        <input type="hidden" name="classe_id" value="{{ $classe_id }}">
+        <input type="hidden" name="semestre" value="1">
         
-        <div class="d-flex justify-content-center p-3">
-            {{ $eleves->links() }}
-        </div>
-    </div>
-</div>
-
-<!-- Légende -->
-<div class="card mt-3">
-    <div class="card-header header-info">
-        <i class="fas fa-info-circle me-2"></i>Légende
-    </div>
-    <div class="card-body">
-        <div class="row">
-            <div class="col-md-3">
-                <p><strong>Moy DD:</strong> Moyenne des devoirs et interrogations</p>
-            </div>
-            <div class="col-md-3">
-                <p><strong>Comp D:</strong> Note de composition</p>
-            </div>
-            <div class="col-md-3">
-                <p><strong>Moy D:</strong> Moyenne de la discipline</p>
-            </div>
-            <div class="col-md-3">
-                <p><strong>Rang D:</strong> Rang de l'élève dans la discipline</p>
-            </div>
-        </div>
-        <div class="alert alert-info">
-            <p class="mb-0"><i class="fas fa-lightbulb me-2"></i>Conseil: Utilisez les filtres pour affiner les résultats et voir les notes par classe. Pour éditer les données, cliquez sur le bouton "Éditer les données".</p>
-        </div>
-    </div>
-</div>
-
-<!-- Modal d'exportation -->
-<div class="modal fade" id="exportModal" tabindex="-1" aria-labelledby="exportModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="exportModalLabel">Exporter les données</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <p>Préparation de l'exportation en PDF...</p>
-                <div class="progress">
-                    <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100" style="width: 100%"></div>
+        <div class="card">
+            <div class="card-header header-success d-flex justify-content-between align-items-center">
+                <div>
+                    <i class="fas fa-edit me-2"></i>Édition des notes ({{ count($eleves) }} élèves)
                 </div>
-                <p class="text-muted mt-3">Cette fonctionnalité est en cours de développement. Le fichier PDF sera disponible prochainement.</p>
+                <div>
+                    <button type="submit" class="btn btn-sm btn-success">
+                        <i class="fas fa-save me-1"></i>Enregistrer les modifications
+                    </button>
+                    <a href="{{ route('semestre1.donnees-detaillees', request()->query()) }}" class="btn btn-sm btn-secondary ms-2">
+                        <i class="fas fa-times me-1"></i>Annuler
+                    </a>
+                </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-bordered table-sm m-0" id="edit-table">
+                        <thead>
+                            <tr>
+                                <th class="text-center align-middle" rowspan="2">N°</th>
+                                <th class="text-center align-middle" rowspan="2">IEN</th>
+                                <th class="text-center align-middle" rowspan="2">Prénom</th>
+                                <th class="text-center align-middle" rowspan="2">Nom</th>
+                                
+                                @foreach($disciplines as $discipline)
+                                    <th class="text-center discipline-col discipline-{{ $discipline->id }}" colspan="4">{{ $discipline->libelle }}</th>
+                                @endforeach
+                            </tr>
+                            <tr>
+                                @foreach($disciplines as $discipline)
+                                    <th class="text-center discipline-col discipline-{{ $discipline->id }}">Moy DD</th>
+                                    <th class="text-center discipline-col discipline-{{ $discipline->id }}">Comp D</th>
+                                    <th class="text-center bg-light discipline-col discipline-{{ $discipline->id }}">Moy D</th>
+                                    <th class="text-center discipline-col discipline-{{ $discipline->id }}">Rang D</th>
+                                @endforeach
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse($eleves as $index => $eleve)
+                            <tr>
+                                <td class="text-center">{{ $index + 1 }}</td>
+                                <td>{{ $eleve->ien }}</td>
+                                <td>{{ $eleve->prenom }}</td>
+                                <td>{{ $eleve->nom }}</td>
+                                
+                                @foreach($disciplines as $discipline)
+                                    @php
+                                        $donnee_moy_dd = $donneesExistantes[$eleve->id][$discipline->id]['moy_dd'] ?? null;
+                                        $donnee_comp_d = $donneesExistantes[$eleve->id][$discipline->id]['comp_d'] ?? null;
+                                        $donnee_moy_d = $donneesExistantes[$eleve->id][$discipline->id]['moy_d'] ?? null;
+                                        $donnee_rang_d = $donneesExistantes[$eleve->id][$discipline->id]['rang_d'] ?? null;
+                                    @endphp
+                                    
+                                    <td class="discipline-col discipline-{{ $discipline->id }}">
+                                        <input type="hidden" name="data[{{ $index }}][eleve_id]" value="{{ $eleve->id }}">
+                                        <input type="text" class="form-control form-control-sm note-input moy-dd" 
+                                               name="data[{{ $index }}][disciplines][{{ $discipline->id }}][moy_dd]" 
+                                               value="{{ $donnee_moy_dd }}"
+                                               data-eleve-index="{{ $index }}"
+                                               data-discipline-id="{{ $discipline->id }}"
+                                               data-type="moy_dd">
+                                    </td>
+                                    <td class="discipline-col discipline-{{ $discipline->id }}">
+                                        <input type="text" class="form-control form-control-sm note-input comp-d" 
+                                               name="data[{{ $index }}][disciplines][{{ $discipline->id }}][comp_d]" 
+                                               value="{{ $donnee_comp_d }}"
+                                               data-eleve-index="{{ $index }}"
+                                               data-discipline-id="{{ $discipline->id }}"
+                                               data-type="comp_d">
+                                    </td>
+                                    <td class="discipline-col discipline-{{ $discipline->id }} bg-light">
+                                        <input type="text" class="form-control form-control-sm note-input moy-d" 
+                                               name="data[{{ $index }}][disciplines][{{ $discipline->id }}][moy_d]" 
+                                               value="{{ $donnee_moy_d }}"
+                                               data-eleve-index="{{ $index }}"
+                                               data-discipline-id="{{ $discipline->id }}"
+                                               data-type="moy_d">
+                                    </td>
+                                    <td class="discipline-col discipline-{{ $discipline->id }}">
+                                        <input type="text" class="form-control form-control-sm note-input rang-d" 
+                                               name="data[{{ $index }}][disciplines][{{ $discipline->id }}][rang_d]" 
+                                               value="{{ $donnee_rang_d }}"
+                                               data-eleve-index="{{ $index }}"
+                                               data-discipline-id="{{ $discipline->id }}"
+                                               data-type="rang_d">
+                                    </td>
+                                @endforeach
+                            </tr>
+                            @empty
+                            <tr>
+                                <td colspan="{{ 4 + (count($disciplines) * 4) }}" class="text-center">Aucun élève trouvé pour cette classe.</td>
+                            </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card-footer">
+                <button type="submit" class="btn btn-success">
+                    <i class="fas fa-save me-1"></i>Enregistrer les modifications
+                </button>
+                <a href="{{ route('semestre1.donnees-detaillees', request()->query()) }}" class="btn btn-secondary ms-2">
+                    <i class="fas fa-times me-1"></i>Annuler
+                </a>
             </div>
         </div>
-    </div>
-</div>
+    </form>
+@endif
 @endsection
 
 @section('styles')
@@ -302,10 +300,8 @@
     }
     
     /* Figer les 4 premières colonnes */
-    .table th:nth-child(1), .table td:nth-child(1),
-    .table th:nth-child(2), .table td:nth-child(2),
-    .table th:nth-child(3), .table td:nth-child(3),
-    .table th:nth-child(4), .table td:nth-child(4) {
+    .table th:nth-child(-n+4), 
+    .table td:nth-child(-n+4) {
         position: sticky;
         left: 0;
         background-color: white;
@@ -313,32 +309,35 @@
     }
     
     .table th:nth-child(1), .table td:nth-child(1) { left: 0; }
-    .table th:nth-child(2), .table td:nth-child(2) { left: 5rem; }
-    .table th:nth-child(3), .table td:nth-child(3) { left: 12rem; }
-    .table th:nth-child(4), .table td:nth-child(4) { left: 19rem; }
+    .table th:nth-child(2), .table td:nth-child(2) { left: 3rem; }
+    .table th:nth-child(3), .table td:nth-child(3) { left: 8rem; }
+    .table th:nth-child(4), .table td:nth-child(4) { left: 15rem; }
     
-    tr:nth-child(odd) td:nth-child(1),
-    tr:nth-child(odd) td:nth-child(2),
-    tr:nth-child(odd) td:nth-child(3),
-    tr:nth-child(odd) td:nth-child(4) {
+    tr:nth-child(odd) td:nth-child(-n+4) {
         background-color: #f8f9fa;
     }
     
     /* Pour les colonnes fixées des entêtes */
-    thead tr:first-child th:nth-child(1),
-    thead tr:first-child th:nth-child(2),
-    thead tr:first-child th:nth-child(3),
-    thead tr:first-child th:nth-child(4) {
+    thead tr:first-child th:nth-child(-n+4),
+    thead tr:nth-child(2) th:nth-child(-n+4) {
         background-color: #fff;
         z-index: 2;
     }
     
-    thead tr:nth-child(2) th:nth-child(1),
-    thead tr:nth-child(2) th:nth-child(2),
-    thead tr:nth-child(2) th:nth-child(3),
-    thead tr:nth-child(2) th:nth-child(4) {
-        background-color: #fff;
-        z-index: 2;
+    /* Style des inputs */
+    .note-input {
+        width: 60px;
+        text-align: center;
+        padding: 0.25rem;
+    }
+    
+    .note-input:focus {
+        background-color: #f0f8ff;
+    }
+    
+    /* Mettre en évidence les cellules modifiées */
+    .modified {
+        background-color: #fffacd !important; /* Light yellow */
     }
 </style>
 @endsection
@@ -355,7 +354,7 @@
                     type: 'GET',
                     dataType: 'json',
                     success: function(data) {
-                        let options = '<option value="">Toutes les classes</option>';
+                        let options = '<option value="">Sélectionnez une classe</option>';
                         $.each(data, function(key, classe) {
                             options += '<option value="' + classe.id + '">' + classe.libelle + '</option>';
                         });
@@ -366,36 +365,125 @@
                     }
                 });
             } else {
-                $('#classe_id').html('<option value="">Toutes les classes</option>').prop('disabled', true);
+                $('#classe_id').html('<option value="">Sélectionnez d\'abord un niveau</option>').prop('disabled', true);
             }
         });
         
-        // Gérer le bouton de réinitialisation
-        $('button[type="reset"]').click(function(e) {
-            e.preventDefault();
-            // Réinitialiser les valeurs des champs
-            $('#niveau_id').val('');
-            $('#classe_id').val('').prop('disabled', true);
-            $('#sort_by').val('nom');
+        // Filtrer par discipline
+        $('#discipline-selector').change(function() {
+            const disciplineId = $(this).val();
             
-            // Soumettre le formulaire avec les valeurs réinitialisées
-            $('#filter-form').submit();
+            if (disciplineId) {
+                // Masquer toutes les colonnes de discipline
+                $('.discipline-col').hide();
+                // Afficher uniquement les colonnes de la discipline sélectionnée
+                $('.discipline-' + disciplineId).show();
+            } else {
+                // Afficher toutes les colonnes
+                $('.discipline-col').show();
+            }
         });
         
-        // Activer le tri automatique au changement
-        $('#sort_by').change(function() {
-            $('#filter-form').submit();
+        // Calcul automatique de la moyenne discipline
+        $(document).on('input', '.moy-dd, .comp-d', function() {
+            const $this = $(this);
+            const eleveIndex = $this.data('eleve-index');
+            const disciplineId = $this.data('discipline-id');
+            const type = $this.data('type');
+            
+            // Trouver les autres champs pour cet élève et cette discipline
+            const $moyDD = $('input[data-eleve-index="' + eleveIndex + '"][data-discipline-id="' + disciplineId + '"][data-type="moy_dd"]');
+            const $compD = $('input[data-eleve-index="' + eleveIndex + '"][data-discipline-id="' + disciplineId + '"][data-type="comp_d"]');
+            const $moyD = $('input[data-eleve-index="' + eleveIndex + '"][data-discipline-id="' + disciplineId + '"][data-type="moy_d"]');
+            
+            // Récupérer les valeurs
+            const moyDD = parseFloat($moyDD.val()) || 0;
+            const compD = parseFloat($compD.val()) || 0;
+            
+            // Calculer la moyenne (50% devoir, 50% composition)
+            if (moyDD > 0 || compD > 0) {
+                let moyD;
+                if (moyDD > 0 && compD > 0) {
+                    moyD = (moyDD + compD) / 2;
+                } else if (moyDD > 0) {
+                    moyD = moyDD;
+                } else {
+                    moyD = compD;
+                }
+                
+                // Mettre à jour le champ moyD avec 2 décimales
+                $moyD.val(moyD.toFixed(2)).addClass('modified');
+            }
         });
         
-        // Gestion de l'exportation en PDF
-        $('#export-pdf-btn').click(function() {
-            $('#exportModal').modal('show');
+        // Marquer les cellules modifiées
+        $(document).on('input', '.note-input', function() {
+            $(this).addClass('modified');
+        });
+        
+        // Formater les nombres avec la virgule comme séparateur décimal (pour le français)
+        function formatDecimal(value) {
+            if (!value) return '';
+            return value.toString().replace('.', ',');
+        }
+        
+        function parseDecimal(value) {
+            if (!value) return 0;
+            return parseFloat(value.toString().replace(',', '.')) || 0;
+        }
+        
+        // Convertir tous les champs au format décimal français lors de la soumission
+        $('#edit-form').on('submit', function() {
+            $('.note-input').each(function() {
+                const $this = $(this);
+                const value = $this.val();
+                
+                if (value) {
+                    // Convertir les virgules en points pour le stockage
+                    $this.val(parseDecimal(value));
+                }
+            });
             
-            // Simuler un chargement
-            setTimeout(function() {
-                $('#exportModal').modal('hide');
-                alert('La fonctionnalité d\'exportation en PDF est en cours de développement.');
-            }, 2000);
+            return true;
+        });
+        
+        // Formater les champs au chargement
+        $('.note-input').each(function() {
+            const $this = $(this);
+            const value = $this.val();
+            
+            if (value) {
+                $this.val(formatDecimal(value));
+            }
+        });
+        
+        // Validation des saisies
+        $('.note-input').on('input', function() {
+            const $this = $(this);
+            const type = $this.data('type');
+            let value = $this.val().replace(',', '.');
+            
+            // Supprimer tout caractère non numérique sauf le point
+            value = value.replace(/[^\d.]/g, '');
+            
+            // Limiter à une seule décimale
+            const parts = value.split('.');
+            if (parts.length > 1) {
+                value = parts[0] + '.' + parts[1].substring(0, 2);
+            }
+            
+            // Limiter les valeurs selon le type
+            if (type === 'moy_dd' || type === 'comp_d' || type === 'moy_d') {
+                // Notes: entre 0 et 20
+                value = Math.min(20, parseFloat(value) || 0);
+            } else if (type === 'rang_d') {
+                // Rang: entiers positifs uniquement
+                value = value.split('.')[0];
+                value = Math.max(1, parseInt(value) || 1);
+            }
+            
+            // Remettre la valeur formatée
+            $this.val(value.toString().replace('.', ','));
         });
     });
 </script>

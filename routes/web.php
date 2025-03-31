@@ -53,6 +53,7 @@ Route::post('/semestre1/donnees-detaillees/store', [Semestre1Controller::class, 
 Route::get('/importation/semestre1', [ImportationController::class, 'indexS1'])->name('importation.s1');
 Route::post('/importation/semestre1', [ImportationController::class, 'importerS1'])->name('importation.importer-s1');
 
+
 // Routes pour le Semestre 2
 Route::get('/semestre2', [Semestre2Controller::class, 'index'])->name('semestre2.index');
 Route::get('/semestre2/analyse-moyennes', [Semestre2Controller::class, 'analyseMoyennes'])->name('semestre2.analyse-moyennes');
@@ -67,6 +68,7 @@ Route::get('/semestre2/rapport-classe/{classe_id}', [Semestre2Controller::class,
 Route::get('/importation/semestre2', [ImportationController::class, 'indexS2'])->name('importation.s2');
 Route::post('/importation/semestre2', [ImportationController::class, 'importerS2'])->name('importation.importer-s2');
 Route::get('/importation/preview/{id}', [ImportationController::class, 'showImport'])->name('importation.show');
+Route::get('/importation/convert-preview/{id}', [ImportationController::class, 'convertPreviewToData'])->name('importation.convert-preview');
 
 // Routes pour le module Général
 Route::get('/general', [GeneralController::class, 'index'])->name('general.index');

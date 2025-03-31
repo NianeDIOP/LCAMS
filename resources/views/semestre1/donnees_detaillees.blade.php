@@ -148,6 +148,9 @@
             <i class="fas fa-table me-2"></i>Notes détaillées par discipline ({{ $eleves->total() }} élèves)
         </div>
         <div>
+            <a href="{{ route('semestre1.donnees-detaillees.edit', request()->query()) }}" class="btn btn-sm btn-success me-2">
+                <i class="fas fa-edit me-1"></i>Éditer les données
+            </a>
             <a href="#" class="btn btn-sm btn-danger" onclick="alert('Fonctionnalité d\'export en cours de développement')">
                 <i class="fas fa-file-pdf me-1"></i>Exporter en PDF
             </a>
