@@ -79,6 +79,60 @@ class ImportationController extends Controller
     }
     
     /**
+     * Détermine la décision du conseil en fonction de la moyenne
+     * 
+     * @param float|null $moyenne La moyenne de l'élève
+     * @return string La décision correspondante
+     */
+    private function determinerDecisionConseil($moyenne) {
+        if ($moyenne === null) {
+            return '';
+        }
+        
+        if ($moyenne >= 16) {
+            return 'Travail excellent';
+        } elseif ($moyenne >= 12) {
+            return 'Satisfaisant doit continuer';
+        } elseif ($moyenne >= 10) {
+            return 'Peut Mieux Faire';
+        } elseif ($moyenne >= 8) {
+            return 'Insuffisant';
+        } elseif ($moyenne >= 5) {
+            return 'Risque de Redoubler';
+        } else {
+            return 'Risque l\'exclusion';
+        }
+    }
+
+    /**
+     * Détermine l'appréciation en fonction de la moyenne
+     * 
+     * @param float|null $moyenne La moyenne de l'élève
+     * @return string L'appréciation correspondante
+     */
+    private function determinerAppreciation($moyenne) {
+        if ($moyenne === null) {
+            return '';
+        }
+        
+        if ($moyenne >= 16) {
+            return 'Félicitations';
+        } elseif ($moyenne >= 14) {
+            return 'Encouragements';
+        } elseif ($moyenne >= 12) {
+            return 'Tableau d\'honneur';
+        } elseif ($moyenne >= 10) {
+            return 'Passable';
+        } elseif ($moyenne >= 8) {
+            return 'Doit redoubler d\'effort';
+        } elseif ($moyenne >= 5) {
+            return 'Avertissement';
+        } else {
+            return 'Blâme';
+        }
+    }
+    
+    /**
      * Importe les données du fichier Excel pour le semestre 1
      */
     public function importerS1(Request $request)
@@ -185,6 +239,13 @@ class ImportationController extends Controller
                     $elevesCount++;
                 }
                 
+                // Récupérer les valeurs des données
+                $moyenne = isset($data[$i][9]) && is_numeric($data[$i][9]) ? $data[$i][9] : null;
+                $rang = isset($data[$i][10]) && is_numeric($data[$i][10]) ? $data[$i][10] : null;
+                $decision = isset($data[$i][11]) && !empty($data[$i][11]) ? $data[$i][11] : $this->determinerDecisionConseil($moyenne);
+                $appreciation = isset($data[$i][12]) && !empty($data[$i][12]) ? $data[$i][12] : $this->determinerAppreciation($moyenne);
+                $observation = isset($data[$i][13]) ? $data[$i][13] : '';
+
                 // Créer ou mettre à jour la moyenne générale
                 $moyenneGenerale = MoyenneGeneraleS1::updateOrCreate(
                     [
@@ -195,10 +256,11 @@ class ImportationController extends Controller
                         'retard' => $data[$i][6] ?? '',
                         'absence' => $data[$i][7] ?? '',
                         'conseil_discipline' => $data[$i][8] ?? '',
-                        'moyenne' => $data[$i][9] ?? null,
-                        'rang' => $data[$i][10] ?? null,
-                        'appreciation' => $data[$i][12] ?? '',
-                        'observation' => $data[$i][13] ?? ''
+                        'moyenne' => $moyenne,
+                        'rang' => $rang,
+                        'decision' => $decision,
+                        'appreciation' => $appreciation,
+                        'observation' => $observation
                     ]
                 );
             }
@@ -463,6 +525,13 @@ class ImportationController extends Controller
                     $elevesCount++;
                 }
                 
+                // Récupérer les valeurs des données
+                $moyenne = isset($data[$i][9]) && is_numeric($data[$i][9]) ? $data[$i][9] : null;
+                $rang = isset($data[$i][10]) && is_numeric($data[$i][10]) ? $data[$i][10] : null;
+                $decision = isset($data[$i][11]) && !empty($data[$i][11]) ? $data[$i][11] : $this->determinerDecisionConseil($moyenne);
+                $appreciation = isset($data[$i][12]) && !empty($data[$i][12]) ? $data[$i][12] : $this->determinerAppreciation($moyenne);
+                $observation = isset($data[$i][13]) ? $data[$i][13] : '';
+
                 // Créer ou mettre à jour la moyenne générale
                 $moyenneGenerale = MoyenneGeneraleS2::updateOrCreate(
                     [
@@ -473,10 +542,11 @@ class ImportationController extends Controller
                         'retard' => $data[$i][6] ?? '',
                         'absence' => $data[$i][7] ?? '',
                         'conseil_discipline' => $data[$i][8] ?? '',
-                        'moyenne' => $data[$i][9] ?? null,
-                        'rang' => $data[$i][10] ?? null,
-                        'appreciation' => $data[$i][12] ?? '',
-                        'observation' => $data[$i][13] ?? ''
+                        'moyenne' => $moyenne,
+                        'rang' => $rang,
+                        'decision' => $decision,
+                        'appreciation' => $appreciation,
+                        'observation' => $observation
                     ]
                 );
             }
@@ -638,74 +708,72 @@ class ImportationController extends Controller
     /**
      * Affiche le détail d'une importation (prévisualisation)
      */
-    // Dans le contrôleur ImportationController, modifiez la méthode showImport:
-
-public function showImport($id)
-{
-    $import = ImportHistory::with(['niveau', 'classe', 'anneeScolaire'])->findOrFail($id);
-    
-    try {
-        $filePath = Storage::path($import->fichier_stocke);
-        $spreadsheet = IOFactory::load($filePath);
+    public function showImport($id)
+    {
+        $import = ImportHistory::with(['niveau', 'classe', 'anneeScolaire'])->findOrFail($id);
         
-        // Récupérer l'onglet "Moyennes eleves"
-        $moyennesSheet = $spreadsheet->getSheet(0)->toArray();
-        $moyennesHeaders = $moyennesSheet[0];
-        $moyennesData = array_slice($moyennesSheet, 1);
-        
-        // Récupérer l'onglet "Données détaillées"
-        $detailsSheet = $spreadsheet->getSheet(1)->toArray();
-        $detailsHeaders = $detailsSheet[0];
-        $detailsData = array_slice($detailsSheet, 1);
-        
-        // Structurer les disciplines
-        $disciplineColumns = [];
-        $currentDiscipline = null;
-        
-        // Parcourir les en-têtes pour identifier les disciplines
-        for ($j = 3; $j < count($detailsHeaders); $j++) {
-            if (!empty($detailsHeaders[$j]) && $detailsHeaders[$j] != 'Moy DD' && $detailsHeaders[$j] != 'Comp D' && $detailsHeaders[$j] != 'Moy D' && $detailsHeaders[$j] != 'Rang D') {
-                $currentDiscipline = $detailsHeaders[$j];
-                $disciplineColumns[$currentDiscipline] = [];
-            }
+        try {
+            $filePath = Storage::path($import->fichier_stocke);
+            $spreadsheet = IOFactory::load($filePath);
             
-            if (!empty($detailsHeaders[$j]) && in_array($detailsHeaders[$j], ['Moy DD', 'Comp D', 'Moy D', 'Rang D']) && $currentDiscipline) {
-                $disciplineColumns[$currentDiscipline][$detailsHeaders[$j]] = $j;
-            }
-        }
-        
-        // Extraire seulement les données qui nous intéressent (Moy D pour chaque discipline)
-        $simplifiedData = [];
-        
-        foreach ($detailsData as $row) {
-            if (empty($row[0])) continue; // Ignorer les lignes vides
+            // Récupérer l'onglet "Moyennes eleves"
+            $moyennesSheet = $spreadsheet->getSheet(0)->toArray();
+            $moyennesHeaders = $moyennesSheet[0];
+            $moyennesData = array_slice($moyennesSheet, 1);
             
-            $eleveDonnees = [
-                'IEN' => $row[0],
-                'Prenom' => $row[1],
-                'Nom' => $row[2]
-            ];
+            // Récupérer l'onglet "Données détaillées"
+            $detailsSheet = $spreadsheet->getSheet(1)->toArray();
+            $detailsHeaders = $detailsSheet[0];
+            $detailsData = array_slice($detailsSheet, 1);
             
-            foreach ($disciplineColumns as $discipline => $columns) {
-                if (isset($columns['Moy D'])) {
-                    $colIndex = $columns['Moy D'];
-                    $eleveDonnees[$discipline] = $row[$colIndex] ?? '';
+            // Structurer les disciplines
+            $disciplineColumns = [];
+            $currentDiscipline = null;
+            
+            // Parcourir les en-têtes pour identifier les disciplines
+            for ($j = 3; $j < count($detailsHeaders); $j++) {
+                if (!empty($detailsHeaders[$j]) && $detailsHeaders[$j] != 'Moy DD' && $detailsHeaders[$j] != 'Comp D' && $detailsHeaders[$j] != 'Moy D' && $detailsHeaders[$j] != 'Rang D') {
+                    $currentDiscipline = $detailsHeaders[$j];
+                    $disciplineColumns[$currentDiscipline] = [];
+                }
+                
+                if (!empty($detailsHeaders[$j]) && in_array($detailsHeaders[$j], ['Moy DD', 'Comp D', 'Moy D', 'Rang D']) && $currentDiscipline) {
+                    $disciplineColumns[$currentDiscipline][$detailsHeaders[$j]] = $j;
                 }
             }
             
-            $simplifiedData[] = $eleveDonnees;
+            // Extraire seulement les données qui nous intéressent (Moy D pour chaque discipline)
+            $simplifiedData = [];
+            
+            foreach ($detailsData as $row) {
+                if (empty($row[0])) continue; // Ignorer les lignes vides
+                
+                $eleveDonnees = [
+                    'IEN' => $row[0],
+                    'Prenom' => $row[1],
+                    'Nom' => $row[2]
+                ];
+                
+                foreach ($disciplineColumns as $discipline => $columns) {
+                    if (isset($columns['Moy D'])) {
+                        $colIndex = $columns['Moy D'];
+                        $eleveDonnees[$discipline] = $row[$colIndex] ?? '';
+                    }
+                }
+                
+                $simplifiedData[] = $eleveDonnees;
+            }
+            
+            // Créer des en-têtes simplifiés
+            $simplifiedHeaders = ['IEN', 'Prenom', 'Nom'];
+            foreach ($disciplineColumns as $discipline => $columns) {
+                $simplifiedHeaders[] = $discipline;
+            }
+            
+            return view('importation.preview', compact('import', 'moyennesHeaders', 'moyennesData', 'detailsHeaders', 'detailsData', 'simplifiedHeaders', 'simplifiedData'));
+        } catch (\Exception $e) {
+            Log::error('Erreur lors de la prévisualisation: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Erreur lors de la prévisualisation: ' . $e->getMessage());
         }
-        
-        // Créer des en-têtes simplifiés
-        $simplifiedHeaders = ['IEN', 'Prenom', 'Nom'];
-        foreach ($disciplineColumns as $discipline => $columns) {
-            $simplifiedHeaders[] = $discipline;
-        }
-        
-        return view('importation.preview', compact('import', 'moyennesHeaders', 'moyennesData', 'detailsHeaders', 'detailsData', 'simplifiedHeaders', 'simplifiedData'));
-    } catch (\Exception $e) {
-        Log::error('Erreur lors de la prévisualisation: ' . $e->getMessage());
-        return redirect()->back()->with('error', 'Erreur lors de la prévisualisation: ' . $e->getMessage());
     }
-}
 }

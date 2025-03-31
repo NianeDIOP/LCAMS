@@ -20,6 +20,7 @@ class MoyenneGeneraleS2 extends Model
         'absence',
         'conseil_discipline',
         'appreciation',
+        'decision',
         'observation',
         'annee_scolaire_id',
     ];
