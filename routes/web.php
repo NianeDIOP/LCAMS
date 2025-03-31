@@ -45,6 +45,7 @@ Route::get('/semestre1/rapport-classe/{classe_id}', [Semestre1Controller::class,
 Route::get('/semestre1/eleves', [Semestre1Controller::class, 'eleves'])->name('semestre1.eleves');
 Route::get('/semestre1/eleve/{id}', [Semestre1Controller::class, 'eleveDetails'])->name('semestre1.eleve-details');
 Route::get('/semestre1/eleves/export/pdf', [Semestre1Controller::class, 'exportPdf'])->name('semestre1.eleves.export.pdf');
+Route::get('/semestre1/donnees-detaillees', [Semestre1Controller::class, 'donneesDetailees'])->name('semestre1.donnees-detaillees');
 
 // Routes pour l'importation du Semestre 1
 Route::get('/importation/semestre1', [ImportationController::class, 'indexS1'])->name('importation.s1');

@@ -151,13 +151,19 @@ class ImportationController extends Controller
         }
         
         try {
+            // Début du log
+            Log::info('Début de l\'importation pour la classe: ' . $classe->libelle);
+            
             // Stocker le fichier original
             $fichier = $request->file('fichier');
             $fichierOriginal = $fichier->getClientOriginalName();
             $fichierStocke = $fichier->store('imports/s1');
             
+            Log::info('Fichier stocké: ' . $fichierStocke);
+            
             // Charger le fichier Excel
             $spreadsheet = IOFactory::load($fichier->getPathname());
+            Log::info('Fichier Excel chargé');
             
             // Créer un enregistrement d'importation
             $importHistory = new ImportHistory([
@@ -170,17 +176,20 @@ class ImportationController extends Controller
                 'statut' => 'en_cours'
             ]);
             $importHistory->save();
-
+            Log::info('Historique d\'importation créé, ID: ' . $importHistory->id);
+    
             // Commencez une transaction
             DB::beginTransaction();
             
             // Traiter l'onglet "Moyennes eleves"
             $worksheet = $spreadsheet->getSheet(0); // Premier onglet
             $data = $worksheet->toArray();
+            Log::info('Onglet "Moyennes eleves" chargé: ' . count($data) . ' lignes trouvées');
             
             // Vérifiez si le format est correct
             if (!isset($data[0][0]) || $data[0][0] != 'IEN') {
                 $importHistory->update(['statut' => 'erreur_format']);
+                Log::error('Format incorrect: l\'entête de la première colonne n\'est pas "IEN"');
                 return redirect()->back()->with('error', 'Format de fichier incorrect. L\'entête de la première colonne doit être "IEN".');
             }
             
@@ -188,6 +197,8 @@ class ImportationController extends Controller
             // Traiter les données des élèves
             for ($i = 1; $i < count($data); $i++) {
                 if (empty($data[$i][0])) continue; // Ignorer les lignes vides
+                
+                Log::info('Traitement de l\'élève avec IEN: ' . $data[$i][0]);
                 
                 // Vérifiez si l'élève existe déjà
                 $eleve = Eleve::where('ien', $data[$i][0])
@@ -236,7 +247,10 @@ class ImportationController extends Controller
                     $eleve->annee_scolaire_id = $anneeScolaireActive->id;
                     $eleve->save();
                     
+                    Log::info('Nouvel élève créé, ID: ' . $eleve->id);
                     $elevesCount++;
+                } else {
+                    Log::info('Élève existant trouvé, ID: ' . $eleve->id);
                 }
                 
                 // Récupérer les valeurs des données
@@ -245,7 +259,7 @@ class ImportationController extends Controller
                 $decision = isset($data[$i][11]) && !empty($data[$i][11]) ? $data[$i][11] : $this->determinerDecisionConseil($moyenne);
                 $appreciation = isset($data[$i][12]) && !empty($data[$i][12]) ? $data[$i][12] : $this->determinerAppreciation($moyenne);
                 $observation = isset($data[$i][13]) ? $data[$i][13] : '';
-
+    
                 // Créer ou mettre à jour la moyenne générale
                 $moyenneGenerale = MoyenneGeneraleS1::updateOrCreate(
                     [
@@ -263,20 +277,34 @@ class ImportationController extends Controller
                         'observation' => $observation
                     ]
                 );
+                
+                Log::info('Moyenne générale créée/mise à jour pour l\'élève ID: ' . $eleve->id);
             }
+            
+            // Première transaction - commit
+            Log::info('Transaction de traitement des élèves et moyennes commise');
+            DB::commit();
+            DB::beginTransaction();
             
             // Traiter l'onglet "Données détaillées"
             $worksheet = $spreadsheet->getSheet(1); // Deuxième onglet
             $data = $worksheet->toArray();
+            Log::info('Onglet "Données détaillées" chargé: ' . count($data) . ' lignes trouvées');
             
             // Identifier les colonnes de disciplines
             $headers = $data[0];
+            Log::info('En-têtes des colonnes: ' . json_encode($headers));
+            
             $disciplinesMap = [];
             $currentDiscipline = null;
             $disciplinesCount = 0;
             
             // Parcourir les en-têtes pour identifier les disciplines
             for ($j = 3; $j < count($headers); $j++) {
+                if (!empty($headers[$j])) {
+                    Log::info('Analyse de l\'en-tête: ' . $headers[$j] . ' à la position ' . $j);
+                }
+                
                 if (!empty($headers[$j]) && $headers[$j] != 'Moy DD' && $headers[$j] != 'Comp D' && $headers[$j] != 'Moy D' && $headers[$j] != 'Rang D') {
                     // Nouvelle discipline principale ou sous-discipline
                     $disciplinesCount++;
@@ -286,6 +314,8 @@ class ImportationController extends Controller
                         $parts = explode('[', $headers[$j]);
                         $disciplinePrincipale = trim($parts[0]);
                         $sousDiscipline = trim(str_replace(']', '', $parts[1]));
+                        
+                        Log::info('Sous-discipline détectée: ' . $sousDiscipline . ' pour discipline principale: ' . $disciplinePrincipale);
                         
                         // Vérifier si la discipline principale existe
                         $disciplineParent = Discipline::where('libelle', $disciplinePrincipale)
@@ -297,6 +327,9 @@ class ImportationController extends Controller
                             $disciplineParent->libelle = $disciplinePrincipale;
                             $disciplineParent->type = 'principale';
                             $disciplineParent->save();
+                            Log::info('Nouvelle discipline principale créée: ' . $disciplinePrincipale . ', ID: ' . $disciplineParent->id);
+                        } else {
+                            Log::info('Discipline principale existante trouvée: ' . $disciplinePrincipale . ', ID: ' . $disciplineParent->id);
                         }
                         
                         // Créer ou trouver la sous-discipline
@@ -310,11 +343,16 @@ class ImportationController extends Controller
                             $discipline->type = 'sous-discipline';
                             $discipline->discipline_parent_id = $disciplineParent->id;
                             $discipline->save();
+                            Log::info('Nouvelle sous-discipline créée: ' . $sousDiscipline . ', ID: ' . $discipline->id);
+                        } else {
+                            Log::info('Sous-discipline existante trouvée: ' . $sousDiscipline . ', ID: ' . $discipline->id);
                         }
                         
                         $currentDiscipline = $discipline->id;
                     } else {
                         // Discipline principale
+                        Log::info('Discipline principale détectée: ' . $headers[$j]);
+                        
                         $discipline = Discipline::where('libelle', $headers[$j])
                                               ->where('type', 'principale')
                                               ->first();
@@ -324,6 +362,9 @@ class ImportationController extends Controller
                             $discipline->libelle = $headers[$j];
                             $discipline->type = 'principale';
                             $discipline->save();
+                            Log::info('Nouvelle discipline principale créée: ' . $headers[$j] . ', ID: ' . $discipline->id);
+                        } else {
+                            Log::info('Discipline principale existante trouvée: ' . $headers[$j] . ', ID: ' . $discipline->id);
                         }
                         
                         $currentDiscipline = $discipline->id;
@@ -332,10 +373,22 @@ class ImportationController extends Controller
                 
                 $columnType = '';
                 if (!empty($headers[$j])) {
-                    if ($headers[$j] == 'Moy DD') $columnType = 'moy_dd';
-                    else if ($headers[$j] == 'Comp D') $columnType = 'comp_d';
-                    else if ($headers[$j] == 'Moy D') $columnType = 'moy_d';
-                    else if ($headers[$j] == 'Rang D') $columnType = 'rang_d';
+                    if ($headers[$j] == 'Moy DD') {
+                        $columnType = 'moy_dd';
+                        Log::info('Colonne Moy DD détectée à la position ' . $j);
+                    }
+                    else if ($headers[$j] == 'Comp D') {
+                        $columnType = 'comp_d';
+                        Log::info('Colonne Comp D détectée à la position ' . $j);
+                    }
+                    else if ($headers[$j] == 'Moy D') {
+                        $columnType = 'moy_d';
+                        Log::info('Colonne Moy D détectée à la position ' . $j);
+                    }
+                    else if ($headers[$j] == 'Rang D') {
+                        $columnType = 'rang_d';
+                        Log::info('Colonne Rang D détectée à la position ' . $j);
+                    }
                 }
                 
                 if ($columnType && $currentDiscipline) {
@@ -343,18 +396,38 @@ class ImportationController extends Controller
                         'discipline_id' => $currentDiscipline,
                         'type' => $columnType
                     ];
+                    Log::info('Mapping: colonne ' . $j . ' => discipline_id: ' . $currentDiscipline . ', type: ' . $columnType);
                 }
             }
             
+            Log::info('Disciplines identifiées: ' . $disciplinesCount);
+            Log::info('Disciplines Map: ' . json_encode($disciplinesMap));
+            
+            // Deuxième transaction - commit
+            Log::info('Transaction d\'identification des disciplines commise');
+            DB::commit();
+            DB::beginTransaction();
+            
             // Traiter les notes des élèves
+            Log::info('Début du traitement des notes des élèves');
+            $notesCreees = 0;
+            
             for ($i = 1; $i < count($data); $i++) {
-                if (empty($data[$i][0])) continue; // Ignorer les lignes vides
+                if (empty($data[$i][0])) {
+                    Log::info('Ligne ' . $i . ' ignorée (IEN vide)');
+                    continue; // Ignorer les lignes vides
+                }
                 
                 $eleve = Eleve::where('ien', $data[$i][0])
                             ->where('annee_scolaire_id', $anneeScolaireActive->id)
                             ->first();
                             
-                if (!$eleve) continue; // Élève non trouvé
+                if (!$eleve) {
+                    Log::warning('Élève non trouvé pour IEN: ' . $data[$i][0]);
+                    continue; // Élève non trouvé
+                }
+                
+                Log::info('Traitement des notes pour l\'élève IEN: ' . $data[$i][0] . ', ID: ' . $eleve->id);
                 
                 $notesParDiscipline = [];
                 
@@ -362,7 +435,9 @@ class ImportationController extends Controller
                 foreach ($disciplinesMap as $colIndex => $mapInfo) {
                     $discipline_id = $mapInfo['discipline_id'];
                     $type = $mapInfo['type'];
-                    $valeur = $data[$i][$colIndex] ?? null;
+                    $valeur = isset($data[$i][$colIndex]) ? $data[$i][$colIndex] : null;
+                    
+                    Log::info("Colonne $colIndex: discipline_id={$discipline_id}, type={$type}, valeur=" . (is_null($valeur) ? 'null' : $valeur));
                     
                     if (!isset($notesParDiscipline[$discipline_id])) {
                         $notesParDiscipline[$discipline_id] = [
@@ -376,23 +451,49 @@ class ImportationController extends Controller
                     $notesParDiscipline[$discipline_id][$type] = $valeur;
                 }
                 
+                Log::info('Notes par discipline pour élève ' . $eleve->id . ': ' . json_encode($notesParDiscipline));
+                
                 // Enregistrer ou mettre à jour les notes pour chaque discipline
                 foreach ($notesParDiscipline as $discipline_id => $notes) {
-                    NoteS1::updateOrCreate(
-                        [
-                            'eleve_id' => $eleve->id,
-                            'discipline_id' => $discipline_id,
-                            'annee_scolaire_id' => $anneeScolaireActive->id
-                        ],
-                        [
-                            'moy_dd' => $notes['moy_dd'],
-                            'comp_d' => $notes['comp_d'],
-                            'moy_d' => $notes['moy_d'],
-                            'rang_d' => $notes['rang_d']
-                        ]
-                    );
+                    try {
+                        $note = NoteS1::updateOrCreate(
+                            [
+                                'eleve_id' => $eleve->id,
+                                'discipline_id' => $discipline_id,
+                                'annee_scolaire_id' => $anneeScolaireActive->id
+                            ],
+                            [
+                                'moy_dd' => $notes['moy_dd'],
+                                'comp_d' => $notes['comp_d'],
+                                'moy_d' => $notes['moy_d'],
+                                'rang_d' => $notes['rang_d']
+                            ]
+                        );
+                        
+                        Log::info("Note créée/mise à jour pour eleve_id={$eleve->id}, discipline_id={$discipline_id}, ID: " . $note->id);
+                        $notesCreees++;
+                    } catch (\Exception $e) {
+                        Log::error("Erreur lors de la création/mise à jour de la note: " . $e->getMessage());
+                        throw $e; // Relancer l'exception pour sortir de la transaction
+                    }
+                }
+                
+                Log::info('Notes enregistrées pour l\'élève ' . $eleve->id);
+                
+                // Commit toutes les 10 lignes pour éviter des transactions trop longues
+                if ($i % 10 == 0) {
+                    DB::commit();
+                    Log::info('Transaction intermédiaire commise à la ligne ' . $i);
+                    DB::beginTransaction();
                 }
             }
+            
+            Log::info("Total des notes créées/mises à jour: " . $notesCreees);
+            
+            // Troisième transaction - commit
+            DB::commit();
+            DB::beginTransaction();
+            Log::info('Transaction de traitement des notes commise');
             
             // Mettre à jour l'historique d'importation
             $importHistory->update([
@@ -406,7 +507,11 @@ class ImportationController extends Controller
                 ]
             ]);
             
+            Log::info('Historique d\'importation mis à jour');
+            
             DB::commit();
+            Log::info('Importation terminée avec succès');
+            
             return redirect()->route('importation.s1')->with('success', 'Données importées avec succès pour le semestre 1.');
             
         } catch (\Exception $e) {
@@ -415,10 +520,10 @@ class ImportationController extends Controller
                 $importHistory->update(['statut' => 'erreur']);
             }
             Log::error('Erreur lors de l\'importation: ' . $e->getMessage());
+            Log::error('Stack trace: ' . $e->getTraceAsString());
             return redirect()->back()->with('error', 'Erreur lors de l\'importation: ' . $e->getMessage());
         }
     }
-    
     /**
      * Importe les données du fichier Excel pour le semestre 2
      */

@@ -341,7 +341,110 @@ class Semestre1Controller extends Controller
      return view('semestre1.eleve_details', compact('anneeScolaireActive', 'eleve'));
  }
 
-
+ 
+/**
+ * Affiche les données détaillées pour le semestre 1
+ */
+public function donneesDetailees(Request $request)
+{
+    $anneeScolaireActive = AnneeScolaire::where('active', true)->first();
+    if (!$anneeScolaireActive) {
+        return redirect()->route('parametres.index')->with('error', 'Aucune année scolaire active. Veuillez en configurer une d\'abord.');
+    }
+    
+    $niveaux = Niveau::where('actif', true)->orderBy('libelle')->get();
+    $classes = collect();
+    
+    // Récupérer les paramètres de filtrage
+    $niveau_id = $request->query('niveau_id');
+    $classe_id = $request->query('classe_id');
+    $sort_by = $request->query('sort_by', 'nom'); // Par défaut, trier par nom
+    
+    if ($niveau_id) {
+        $classes = Classe::where('niveau_id', $niveau_id)
+                    ->where('actif', true)
+                    ->orderBy('libelle')
+                    ->get();
+    }
+    
+    // Initialiser la requête des élèves avec les relations nécessaires
+    $elevesQuery = Eleve::with(['notesS1', 'classe.niveau'])
+                  ->where('eleves.annee_scolaire_id', $anneeScolaireActive->id);
+    
+    // Appliquer les filtres
+    if ($classe_id) {
+        $elevesQuery->where('eleves.classe_id', $classe_id);
+    } elseif ($niveau_id) {
+        $elevesQuery->whereHas('classe', function($query) use ($niveau_id) {
+            $query->where('niveau_id', $niveau_id);
+        });
+    }
+    
+    // Appliquer le tri
+    switch ($sort_by) {
+        case 'moyenne_desc':
+            $elevesQuery->join('moyennes_generales_s1', function($join) use ($anneeScolaireActive) {
+                    $join->on('eleves.id', '=', 'moyennes_generales_s1.eleve_id')
+                         ->where('moyennes_generales_s1.annee_scolaire_id', '=', $anneeScolaireActive->id);
+                })
+                ->select('eleves.*')
+                ->orderByDesc('moyennes_generales_s1.moyenne');
+            break;
+        case 'moyenne_asc':
+            $elevesQuery->join('moyennes_generales_s1', function($join) use ($anneeScolaireActive) {
+                    $join->on('eleves.id', '=', 'moyennes_generales_s1.eleve_id')
+                         ->where('moyennes_generales_s1.annee_scolaire_id', '=', $anneeScolaireActive->id);
+                })
+                ->select('eleves.*')
+                ->orderBy('moyennes_generales_s1.moyenne');
+            break;
+        default: // Cas 'nom' ou autre
+            $elevesQuery->orderBy('eleves.nom')
+                ->orderBy('eleves.prenom');
+            break;
+    }
+    
+    // Récupérer les élèves avec pagination
+    $eleves = $elevesQuery->paginate(20)->withQueryString();
+    
+    // Récupérer toutes les disciplines (avec les notes pour chaque élève)
+    $disciplinesQuery = Discipline::whereHas('notesS1', function($query) use ($classe_id, $anneeScolaireActive) {
+        $query->where('annee_scolaire_id', $anneeScolaireActive->id);
+        if ($classe_id) {
+            $query->whereHas('eleve', function($q) use ($classe_id) {
+                $q->where('classe_id', $classe_id);
+            });
+        }
+    });
+    
+    // Récupérer les disciplines principales uniquement
+    $disciplines = $disciplinesQuery->where('type', 'principale')
+                  ->orderBy('libelle')
+                  ->get();
+    
+    // Charger les notes pour tous les élèves à la fois
+    $notesByEleveAndDiscipline = [];
+    
+    $notes = NoteS1::with('discipline')
+        ->where('annee_scolaire_id', $anneeScolaireActive->id)
+        ->whereIn('eleve_id', $eleves->pluck('id'))
+        ->get();
+    
+    foreach ($notes as $note) {
+        $notesByEleveAndDiscipline[$note->eleve_id][$note->discipline_id] = $note;
+    }
+    
+    return view('semestre1.donnees_detaillees', compact(
+        'anneeScolaireActive', 
+        'niveaux', 
+        'classes', 
+        'eleves', 
+        'disciplines',
+        'notesByEleveAndDiscipline',
+        'niveau_id', 
+        'classe_id'
+    ));
+}
 /**
  * Exporte la liste des élèves en PDF
  */
