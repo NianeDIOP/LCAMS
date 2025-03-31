@@ -12,6 +12,7 @@ use App\Models\MoyenneGeneraleS1;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Barryvdh\DomPDF\Facade\Pdf ;
+use App\Models\DonneeDetaillee;
 
 
 class Semestre1Controller extends Controller
@@ -345,11 +346,15 @@ class Semestre1Controller extends Controller
 /**
  * Affiche les données détaillées pour le semestre 1
  */
-public function donneesDetailees(Request $request)
+/**
+ * Affiche le formulaire d'édition des données détaillées
+ */
+
+ public function donneesDetailees(Request $request)
 {
     $anneeScolaireActive = AnneeScolaire::where('active', true)->first();
     if (!$anneeScolaireActive) {
-        return redirect()->route('parametres.index')->with('error', 'Aucune année scolaire active. Veuillez en configurer une d\'abord.');
+        return redirect()->route('parametres.index')->with('error', 'Aucune année scolaire active.');
     }
     
     $niveaux = Niveau::where('actif', true)->orderBy('libelle')->get();
@@ -358,7 +363,7 @@ public function donneesDetailees(Request $request)
     // Récupérer les paramètres de filtrage
     $niveau_id = $request->query('niveau_id');
     $classe_id = $request->query('classe_id');
-    $sort_by = $request->query('sort_by', 'nom'); // Par défaut, trier par nom
+    $sort_by = $request->query('sort_by', 'nom');
     
     if ($niveau_id) {
         $classes = Classe::where('niveau_id', $niveau_id)
@@ -367,13 +372,12 @@ public function donneesDetailees(Request $request)
                     ->get();
     }
     
-    // Initialiser la requête des élèves avec les relations nécessaires
-    $elevesQuery = Eleve::with(['notesS1', 'classe.niveau'])
-                  ->where('eleves.annee_scolaire_id', $anneeScolaireActive->id);
+    // Initialiser la requête des élèves
+    $elevesQuery = Eleve::where('annee_scolaire_id', $anneeScolaireActive->id);
     
     // Appliquer les filtres
     if ($classe_id) {
-        $elevesQuery->where('eleves.classe_id', $classe_id);
+        $elevesQuery->where('classe_id', $classe_id);
     } elseif ($niveau_id) {
         $elevesQuery->whereHas('classe', function($query) use ($niveau_id) {
             $query->where('niveau_id', $niveau_id);
@@ -398,52 +402,178 @@ public function donneesDetailees(Request $request)
                 ->select('eleves.*')
                 ->orderBy('moyennes_generales_s1.moyenne');
             break;
-        default: // Cas 'nom' ou autre
-            $elevesQuery->orderBy('eleves.nom')
-                ->orderBy('eleves.prenom');
+        default:
+            $elevesQuery->orderBy('nom')
+                ->orderBy('prenom');
             break;
     }
     
     // Récupérer les élèves avec pagination
     $eleves = $elevesQuery->paginate(20)->withQueryString();
     
-    // Récupérer toutes les disciplines (avec les notes pour chaque élève)
-    $disciplinesQuery = Discipline::whereHas('notesS1', function($query) use ($classe_id, $anneeScolaireActive) {
-        $query->where('annee_scolaire_id', $anneeScolaireActive->id);
-        if ($classe_id) {
-            $query->whereHas('eleve', function($q) use ($classe_id) {
-                $q->where('classe_id', $classe_id);
-            });
-        }
-    });
-    
-    // Récupérer les disciplines principales uniquement
-    $disciplines = $disciplinesQuery->where('type', 'principale')
+    // Récupérer toutes les disciplines principales
+    $disciplines = Discipline::where('type', 'principale')
                   ->orderBy('libelle')
                   ->get();
     
-    // Charger les notes pour tous les élèves à la fois
-    $notesByEleveAndDiscipline = [];
+    // Récupérer les données détaillées pour les élèves
+    $eleveIds = $eleves->pluck('id')->toArray();
+    $donneesDetailees = DonneeDetaillee::where('annee_scolaire_id', $anneeScolaireActive->id)
+                        ->where('semestre', 1)
+                        ->whereIn('eleve_id', $eleveIds)
+                        ->get();
     
-    $notes = NoteS1::with('discipline')
-        ->where('annee_scolaire_id', $anneeScolaireActive->id)
-        ->whereIn('eleve_id', $eleves->pluck('id'))
-        ->get();
-    
-    foreach ($notes as $note) {
-        $notesByEleveAndDiscipline[$note->eleve_id][$note->discipline_id] = $note;
+    // Organiser les données par élève et discipline
+    $donnees = [];
+    foreach ($donneesDetailees as $donnee) {
+        if (!isset($donnees[$donnee->eleve_id])) {
+            $donnees[$donnee->eleve_id] = [];
+        }
+        
+        if (!isset($donnees[$donnee->eleve_id][$donnee->discipline_id])) {
+            $donnees[$donnee->eleve_id][$donnee->discipline_id] = [];
+        }
+        
+        $donnees[$donnee->eleve_id][$donnee->discipline_id][$donnee->type] = $donnee->valeur;
     }
     
     return view('semestre1.donnees_detaillees', compact(
-        'anneeScolaireActive', 
-        'niveaux', 
-        'classes', 
-        'eleves', 
+        'anneeScolaireActive',
+        'niveaux',
+        'classes',
+        'eleves',
         'disciplines',
-        'notesByEleveAndDiscipline',
-        'niveau_id', 
+        'donnees',
+        'niveau_id',
         'classe_id'
     ));
+}
+public function donneesDetailleesEdit(Request $request)
+{
+    $anneeScolaireActive = AnneeScolaire::where('active', true)->first();
+    if (!$anneeScolaireActive) {
+        return redirect()->route('parametres.index')->with('error', 'Aucune année scolaire active.');
+    }
+    
+    $niveaux = Niveau::where('actif', true)->orderBy('libelle')->get();
+    $classes = collect();
+    $eleves = collect();
+    $donneesExistantes = [];
+    
+    $niveau_id = $request->query('niveau_id');
+    $classe_id = $request->query('classe_id');
+    
+    if ($niveau_id) {
+        $classes = Classe::where('niveau_id', $niveau_id)
+                    ->where('actif', true)
+                    ->orderBy('libelle')
+                    ->get();
+    }
+    
+    if ($classe_id) {
+        // Récupérer les élèves de la classe
+        $eleves = Eleve::where('classe_id', $classe_id)
+                ->where('annee_scolaire_id', $anneeScolaireActive->id)
+                ->orderBy('nom')
+                ->orderBy('prenom')
+                ->get();
+        
+        // Récupérer les données détaillées existantes
+        $donneesDetailees = DonneeDetaillee::where('annee_scolaire_id', $anneeScolaireActive->id)
+                            ->where('semestre', 1)
+                            ->whereIn('eleve_id', $eleves->pluck('id'))
+                            ->get();
+        
+        // Organiser les données par élève et discipline
+        foreach ($donneesDetailees as $donnee) {
+            if (!isset($donneesExistantes[$donnee->eleve_id])) {
+                $donneesExistantes[$donnee->eleve_id] = [];
+            }
+            
+            if (!isset($donneesExistantes[$donnee->eleve_id][$donnee->discipline_id])) {
+                $donneesExistantes[$donnee->eleve_id][$donnee->discipline_id] = [];
+            }
+            
+            $donneesExistantes[$donnee->eleve_id][$donnee->discipline_id][$donnee->type] = $donnee->valeur;
+        }
+    }
+    
+    // Récupérer toutes les disciplines principales
+    $disciplines = Discipline::where('type', 'principale')
+                  ->orderBy('libelle')
+                  ->get();
+    
+    return view('semestre1.donnees_detaillees_edit', compact(
+        'anneeScolaireActive',
+        'niveaux',
+        'classes',
+        'eleves',
+        'disciplines',
+        'donneesExistantes',
+        'niveau_id',
+        'classe_id'
+    ));
+}
+
+/**
+ * Enregistre les données détaillées
+ */
+public function donneesDetailleesStore(Request $request)
+{
+    $anneeScolaireActive = AnneeScolaire::where('active', true)->first();
+    if (!$anneeScolaireActive) {
+        return redirect()->route('parametres.index')->with('error', 'Aucune année scolaire active.');
+    }
+    
+    $classe_id = $request->input('classe_id');
+    $semestre = $request->input('semestre', 1);
+    $data = $request->input('data', []);
+    
+    // Commencer une transaction
+    DB::beginTransaction();
+    
+    try {
+        // Pour chaque élève
+        foreach ($data as $eleveData) {
+            $eleve_id = $eleveData['eleve_id'];
+            
+            // Pour chaque discipline
+            foreach ($eleveData['disciplines'] as $discipline_id => $values) {
+                // Pour chaque type de données (moy_dd, comp_d, moy_d, rang_d)
+                foreach ($values as $type => $valeur) {
+                    if ($valeur === '') continue; // Ignorer les valeurs vides
+                    
+                    // Convertir en float ou int selon le type
+                    if ($type === 'rang_d') {
+                        $valeur = (int) $valeur;
+                    } else {
+                        $valeur = (float) str_replace(',', '.', $valeur);
+                    }
+                    
+                    // Enregistrer ou mettre à jour la donnée
+                    DonneeDetaillee::updateOrCreate(
+                        [
+                            'eleve_id' => $eleve_id,
+                            'discipline_id' => $discipline_id,
+                            'type' => $type,
+                            'annee_scolaire_id' => $anneeScolaireActive->id,
+                            'semestre' => $semestre
+                        ],
+                        [
+                            'valeur' => $valeur
+                        ]
+                    );
+                }
+            }
+        }
+        
+        DB::commit();
+        return redirect()->route('semestre1.donnees-detaillees')->with('success', 'Données détaillées enregistrées avec succès.');
+        
+    } catch (\Exception $e) {
+        DB::rollBack();
+        return back()->with('error', 'Erreur lors de l\'enregistrement des données: ' . $e->getMessage());
+    }
 }
 /**
  * Exporte la liste des élèves en PDF

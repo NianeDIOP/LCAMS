@@ -84,62 +84,6 @@
 </h1>
 <p class="page-subtitle">Consultez les notes détaillées par discipline pour le premier semestre de l'année scolaire {{ $anneeScolaireActive->libelle }}.</p>
 
-<!-- Panneau de débogage temporaire -->
-@if(count($eleves) > 0)
-<div class="card mb-3">
-    <div class="card-header bg-warning text-white d-flex justify-content-between align-items-center">
-        <div>
-            <i class="fas fa-bug me-2"></i>Informations de débogage (temporaire)
-        </div>
-        <button class="btn btn-sm btn-light" onclick="this.parentElement.parentElement.style.display='none'">
-            <i class="fas fa-times"></i>
-        </button>
-    </div>
-    <div class="card-body">
-        <h6>Informations générales:</h6>
-        <ul>
-            <li>Nombre d'élèves: {{ $eleves->count() }}</li>
-            <li>Nombre de disciplines: {{ $disciplines->count() }}</li>
-            <li>Disciplines trouvées: {{ implode(', ', $disciplines->pluck('libelle')->toArray()) }}</li>
-        </ul>
-        
-        @if($eleves->count() > 0)
-            <h6>Premier élève ({{ $eleves->first()->prenom }} {{ $eleves->first()->nom }}):</h6>
-            <ul>
-                @php
-                    $premierEleve = $eleves->first();
-                    $notesEleve = $notes[$premierEleve->id] ?? [];
-                @endphp
-                <li>ID: {{ $premierEleve->id }}</li>
-                <li>Nombre de notes: {{ count($notesEleve) }}</li>
-                
-                @if(count($notesEleve) > 0)
-                    <li>Disciplines avec notes:
-                        <ul>
-                            @foreach($notesEleve as $disciplineId => $note)
-                                @php
-                                    $discipline = $disciplines->firstWhere('id', $disciplineId);
-                                    $disciplineName = $discipline ? $discipline->libelle : "Discipline inconnue (ID: $disciplineId)";
-                                @endphp
-                                <li>
-                                    {{ $disciplineName }}: 
-                                    Moy DD={{ $note->moy_dd !== null ? number_format($note->moy_dd, 2) : 'N/A' }}, 
-                                    Comp D={{ $note->comp_d !== null ? number_format($note->comp_d, 2) : 'N/A' }}, 
-                                    Moy D={{ $note->moy_d !== null ? number_format($note->moy_d, 2) : 'N/A' }}, 
-                                    Rang D={{ $note->rang_d ?? 'N/A' }}
-                                </li>
-                            @endforeach
-                        </ul>
-                    </li>
-                @else
-                    <li>Aucune note trouvée pour cet élève!</li>
-                @endif
-            </ul>
-        @endif
-    </div>
-</div>
-@endif
-
 <!-- Filtres -->
 <div class="card mb-3">
     <div class="card-header header-primary d-flex justify-content-between align-items-center py-2">
@@ -220,6 +164,7 @@
                         <th class="text-center align-middle" rowspan="2">IEN</th>
                         <th class="text-center align-middle" rowspan="2">Prénom</th>
                         <th class="text-center align-middle" rowspan="2">Nom</th>
+                        <th class="text-center align-middle" rowspan="2">Sexe</th>
                         
                         @foreach($disciplines as $discipline)
                             <th class="text-center" colspan="4">{{ $discipline->libelle }}</th>
@@ -240,34 +185,32 @@
                         <td>{{ $eleve->ien }}</td>
                         <td>{{ $eleve->prenom }}</td>
                         <td>{{ $eleve->nom }}</td>
+                        <td>{{ $eleve->sexe }}</td>
                         
                         @foreach($disciplines as $discipline)
                             @php
-                                // Vérification explicite pour récupérer les notes de l'élève pour cette discipline
-                                $note = null;
-                                if (isset($notes[$eleve->id]) && isset($notes[$eleve->id][$discipline->id])) {
-                                    $note = $notes[$eleve->id][$discipline->id];
-                                }
+                                $donnee_moy_dd = $donnees[$eleve->id][$discipline->id]['moy_dd'] ?? null;
+                                $donnee_comp_d = $donnees[$eleve->id][$discipline->id]['comp_d'] ?? null;
+                                $donnee_moy_d = $donnees[$eleve->id][$discipline->id]['moy_d'] ?? null;
+                                $donnee_rang_d = $donnees[$eleve->id][$discipline->id]['rang_d'] ?? null;
                                 
-                                // Formattage des valeurs pour affichage
-                                $moyDD = $note && $note->moy_dd !== null ? number_format($note->moy_dd, 2) : '-';
-                                $compD = $note && $note->comp_d !== null ? number_format($note->comp_d, 2) : '-';
-                                $moyD = $note && $note->moy_d !== null ? number_format($note->moy_d, 2) : '-';
-                                $rangD = $note && $note->rang_d ? $note->rang_d : '-';
+                                $moyDDValue = $donnee_moy_dd !== null ? number_format($donnee_moy_dd, 2) : '-';
+                                $compDValue = $donnee_comp_d !== null ? number_format($donnee_comp_d, 2) : '-';
+                                $moyDValue = $donnee_moy_d !== null ? number_format($donnee_moy_d, 2) : '-';
+                                $rangDValue = $donnee_rang_d !== null ? $donnee_rang_d : '-';
                                 
-                                // Classe pour la coloration des moyennes
-                                $textClass = $note && $note->moy_d !== null ? ($note->moy_d >= 10 ? 'text-success' : 'text-danger') : 'text-secondary';
+                                $textClass = $donnee_moy_d !== null ? ($donnee_moy_d >= 10 ? 'text-success' : 'text-danger') : '';
                             @endphp
                             
-                            <td class="text-center">{{ $moyDD }}</td>
-                            <td class="text-center">{{ $compD }}</td>
-                            <td class="text-center bg-light {{ $textClass }} fw-bold">{{ $moyD }}</td>
-                            <td class="text-center">{{ $rangD }}</td>
+                            <td class="text-center">{{ $moyDDValue }}</td>
+                            <td class="text-center">{{ $compDValue }}</td>
+                            <td class="text-center bg-light {{ $textClass }} fw-bold">{{ $moyDValue }}</td>
+                            <td class="text-center">{{ $rangDValue }}</td>
                         @endforeach
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="{{ 3 + (count($disciplines) * 4) }}" class="text-center">Aucun élève trouvé pour les critères sélectionnés.</td>
+                        <td colspan="{{ 4 + (count($disciplines) * 4) }}" class="text-center">Aucun élève trouvé pour les critères sélectionnés.</td>
                     </tr>
                     @endforelse
                 </tbody>
@@ -301,7 +244,7 @@
             </div>
         </div>
         <div class="alert alert-info">
-            <p class="mb-0"><i class="fas fa-lightbulb me-2"></i>Conseil: Utilisez les filtres pour affiner les résultats et voir les notes par classe.</p>
+            <p class="mb-0"><i class="fas fa-lightbulb me-2"></i>Conseil: Utilisez les filtres pour affiner les résultats et voir les notes par classe. Pour éditer les données, cliquez sur le bouton "Éditer les données".</p>
         </div>
     </div>
 </div>
@@ -358,10 +301,11 @@
         padding: 0.4rem;
     }
     
-    /* Figer les 3 premières colonnes */
+    /* Figer les 4 premières colonnes */
     .table th:nth-child(1), .table td:nth-child(1),
     .table th:nth-child(2), .table td:nth-child(2),
-    .table th:nth-child(3), .table td:nth-child(3) {
+    .table th:nth-child(3), .table td:nth-child(3),
+    .table th:nth-child(4), .table td:nth-child(4) {
         position: sticky;
         left: 0;
         background-color: white;
@@ -369,26 +313,30 @@
     }
     
     .table th:nth-child(1), .table td:nth-child(1) { left: 0; }
-    .table th:nth-child(2), .table td:nth-child(2) { left: 5rem; }  /* Ajuster selon la largeur de la première colonne */
-    .table th:nth-child(3), .table td:nth-child(3) { left: 12rem; } /* Ajuster selon la largeur des colonnes précédentes */
+    .table th:nth-child(2), .table td:nth-child(2) { left: 5rem; }
+    .table th:nth-child(3), .table td:nth-child(3) { left: 12rem; }
+    .table th:nth-child(4), .table td:nth-child(4) { left: 19rem; }
     
     tr:nth-child(odd) td:nth-child(1),
     tr:nth-child(odd) td:nth-child(2),
-    tr:nth-child(odd) td:nth-child(3) {
+    tr:nth-child(odd) td:nth-child(3),
+    tr:nth-child(odd) td:nth-child(4) {
         background-color: #f8f9fa;
     }
     
     /* Pour les colonnes fixées des entêtes */
     thead tr:first-child th:nth-child(1),
     thead tr:first-child th:nth-child(2),
-    thead tr:first-child th:nth-child(3) {
+    thead tr:first-child th:nth-child(3),
+    thead tr:first-child th:nth-child(4) {
         background-color: #fff;
         z-index: 2;
     }
     
     thead tr:nth-child(2) th:nth-child(1),
     thead tr:nth-child(2) th:nth-child(2),
-    thead tr:nth-child(2) th:nth-child(3) {
+    thead tr:nth-child(2) th:nth-child(3),
+    thead tr:nth-child(2) th:nth-child(4) {
         background-color: #fff;
         z-index: 2;
     }
