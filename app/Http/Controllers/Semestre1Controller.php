@@ -210,151 +210,127 @@ class Semestre1Controller extends Controller
     }
 
     /**
- * Affiche la liste des élèves avec leurs informations pour le semestre 1
- */
- /**
-  * Affiche la liste des élèves avec leurs informations pour le semestre 1
-  */
- public function eleves(Request $request)
- {
-     $anneeScolaireActive = AnneeScolaire::where('active', true)->first();
-     if (!$anneeScolaireActive) {
-         return redirect()->route('parametres.index')->with('error', 'Aucune année scolaire active. Veuillez en configurer une d\'abord.');
-     }
-     
-     $niveaux = Niveau::where('actif', true)->orderBy('libelle')->get();
-     $classes = collect();
-     
-     // Récupérer les paramètres de filtrage
-     $niveau_id = $request->query('niveau_id');
-     $classe_id = $request->query('classe_id');
-     $sexe = $request->query('sexe');
-     $moyenne_min = $request->query('moyenne_min');
-     $moyenne_max = $request->query('moyenne_max');
-     $admis_only = $request->query('admis_only');
-     $sort_by = $request->query('sort_by', 'nom'); // Par défaut, trier par nom
-     
-     if ($niveau_id) {
-         $classes = Classe::where('niveau_id', $niveau_id)
-                     ->where('actif', true)
-                     ->orderBy('libelle')
-                     ->get();
-     }
-     
-     // Initialiser la requête des élèves avec les relations nécessaires
-     $elevesQuery = Eleve::with(['moyenneGeneraleS1', 'classe.niveau'])
-                     ->where('eleves.annee_scolaire_id', $anneeScolaireActive->id);
-     
-     // Appliquer les filtres
-     if ($classe_id) {
-         $elevesQuery->where('eleves.classe_id', $classe_id);
-     } elseif ($niveau_id) {
-         $elevesQuery->whereHas('classe', function($query) use ($niveau_id) {
-             $query->where('niveau_id', $niveau_id);
-         });
-     }
-     
-     if ($sexe) {
-         $elevesQuery->where('eleves.sexe', $sexe);
-     }
-     
-     // Filtrer par moyenne
-     if ($moyenne_min !== null || $moyenne_max !== null || $admis_only) {
-         $elevesQuery->whereHas('moyenneGeneraleS1', function($query) use ($moyenne_min, $moyenne_max, $admis_only, $anneeScolaireActive) {
-             $query->where('moyennes_generales_s1.annee_scolaire_id', $anneeScolaireActive->id);
-             
-             if ($moyenne_min !== null) {
-                 $query->where('moyennes_generales_s1.moyenne', '>=', $moyenne_min);
-             }
-             
-             if ($moyenne_max !== null) {
-                 $query->where('moyennes_generales_s1.moyenne', '<=', $moyenne_max);
-             }
-             
-             if ($admis_only) {
-                 $query->where('moyennes_generales_s1.moyenne', '>=', 10);
-             }
-         });
-     }
-     
-     // Appliquer le tri
-     switch ($sort_by) {
-         case 'moyenne_desc':
-             $elevesQuery->join('moyennes_generales_s1', function($join) use ($anneeScolaireActive) {
-                     $join->on('eleves.id', '=', 'moyennes_generales_s1.eleve_id')
-                          ->where('moyennes_generales_s1.annee_scolaire_id', '=', $anneeScolaireActive->id);
-                 })
-                 ->select('eleves.*')
-                 ->orderByDesc('moyennes_generales_s1.moyenne');
-             break;
-         case 'moyenne_asc':
-             $elevesQuery->join('moyennes_generales_s1', function($join) use ($anneeScolaireActive) {
-                     $join->on('eleves.id', '=', 'moyennes_generales_s1.eleve_id')
-                          ->where('moyennes_generales_s1.annee_scolaire_id', '=', $anneeScolaireActive->id);
-                 })
-                 ->select('eleves.*')
-                 ->orderBy('moyennes_generales_s1.moyenne');
-             break;
-         case 'rang':
-             $elevesQuery->join('moyennes_generales_s1', function($join) use ($anneeScolaireActive) {
-                     $join->on('eleves.id', '=', 'moyennes_generales_s1.eleve_id')
-                          ->where('moyennes_generales_s1.annee_scolaire_id', '=', $anneeScolaireActive->id);
-                 })
-                 ->select('eleves.*')
-                 ->orderBy('moyennes_generales_s1.rang');
-             break;
-         default: // Cas 'nom' ou autre
-             $elevesQuery->orderBy('eleves.classe_id')
-                 ->orderBy('eleves.nom')
-                 ->orderBy('eleves.prenom');
-             break;
-     }
-     
-     // Récupérer les élèves avec pagination
-     $eleves = $elevesQuery->paginate(20)->withQueryString();
-     
-     return view('semestre1.eleves', compact(
-         'anneeScolaireActive', 
-         'niveaux', 
-         'classes', 
-         'eleves', 
-         'niveau_id', 
-         'classe_id'
-     ));
- }
- 
- /**
-  * Affiche les détails d'un élève spécifique pour le semestre 1
-  */
- public function eleveDetails($id)
- {
-     $anneeScolaireActive = AnneeScolaire::where('active', true)->first();
-     
-     $eleve = Eleve::with([
-             'moyenneGeneraleS1',
-             'notesS1.discipline',
-             'classe.niveau'
-         ])
-         ->where('id', $id)
-         ->where('annee_scolaire_id', $anneeScolaireActive->id)
-         ->firstOrFail();
-     
-     return view('semestre1.eleve_details', compact('anneeScolaireActive', 'eleve'));
- }
+     * Affiche la liste des élèves avec leurs informations pour le semestre 1
+     */
+    public function eleves(Request $request)
+    {
+        $anneeScolaireActive = AnneeScolaire::where('active', true)->first();
+        if (!$anneeScolaireActive) {
+            return redirect()->route('parametres.index')->with('error', 'Aucune année scolaire active. Veuillez en configurer une d\'abord.');
+        }
+        
+        $niveaux = Niveau::where('actif', true)->orderBy('libelle')->get();
+        $classes = collect();
+        
+        // Récupérer les paramètres de filtrage
+        $niveau_id = $request->query('niveau_id');
+        $classe_id = $request->query('classe_id');
+        $sexe = $request->query('sexe');
+        $moyenne_min = $request->query('moyenne_min');
+        $moyenne_max = $request->query('moyenne_max');
+        $admis_only = $request->query('admis_only');
+        $sort_by = $request->query('sort_by', 'nom'); // Par défaut, trier par nom
+        
+        if ($niveau_id) {
+            $classes = Classe::where('niveau_id', $niveau_id)
+                        ->where('actif', true)
+                        ->orderBy('libelle')
+                        ->get();
+        }
+        
+        // Initialiser la requête des élèves avec les relations nécessaires
+        $elevesQuery = Eleve::with(['moyenneGeneraleS1', 'classe.niveau'])
+                        ->where('eleves.annee_scolaire_id', $anneeScolaireActive->id);
+        
+        // Appliquer les filtres
+        if ($classe_id) {
+            $elevesQuery->where('eleves.classe_id', $classe_id);
+        } elseif ($niveau_id) {
+            $elevesQuery->whereHas('classe', function($query) use ($niveau_id) {
+                $query->where('niveau_id', $niveau_id);
+            });
+        }
+        
+        if ($sexe) {
+            $elevesQuery->where('eleves.sexe', $sexe);
+        }
+        
+        // Filtrer par moyenne
+        if ($moyenne_min !== null || $moyenne_max !== null || $admis_only) {
+            $elevesQuery->whereHas('moyenneGeneraleS1', function($query) use ($moyenne_min, $moyenne_max, $admis_only, $anneeScolaireActive) {
+                $query->where('moyennes_generales_s1.annee_scolaire_id', $anneeScolaireActive->id);
+                
+                if ($moyenne_min !== null) {
+                    $query->where('moyennes_generales_s1.moyenne', '>=', $moyenne_min);
+                }
+                
+                if ($moyenne_max !== null) {
+                    $query->where('moyennes_generales_s1.moyenne', '<=', $moyenne_max);
+                }
+                
+                if ($admis_only) {
+                    $query->where('moyennes_generales_s1.moyenne', '>=', 10);
+                }
+            });
+        }
+        
+        // Appliquer le tri
+        switch ($sort_by) {
+            case 'moyenne_desc':
+                $elevesQuery->join('moyennes_generales_s1', function($join) use ($anneeScolaireActive) {
+                        $join->on('eleves.id', '=', 'moyennes_generales_s1.eleve_id')
+                             ->where('moyennes_generales_s1.annee_scolaire_id', '=', $anneeScolaireActive->id);
+                    })
+                    ->select('eleves.*')
+                    ->orderByDesc('moyennes_generales_s1.moyenne');
+                break;
+            case 'moyenne_asc':
+                $elevesQuery->join('moyennes_generales_s1', function($join) use ($anneeScolaireActive) {
+                        $join->on('eleves.id', '=', 'moyennes_generales_s1.eleve_id')
+                             ->where('moyennes_generales_s1.annee_scolaire_id', '=', $anneeScolaireActive->id);
+                    })
+                    ->select('eleves.*')
+                    ->orderBy('moyennes_generales_s1.moyenne');
+                break;
+            case 'rang':
+                $elevesQuery->join('moyennes_generales_s1', function($join) use ($anneeScolaireActive) {
+                        $join->on('eleves.id', '=', 'moyennes_generales_s1.eleve_id')
+                             ->where('moyennes_generales_s1.annee_scolaire_id', '=', $anneeScolaireActive->id);
+                    })
+                    ->select('eleves.*')
+                    ->orderBy('moyennes_generales_s1.rang');
+                break;
+            default: // Cas 'nom' ou autre
+                $elevesQuery->orderBy('eleves.classe_id')
+                    ->orderBy('eleves.nom')
+                    ->orderBy('eleves.prenom');
+                break;
+        }
+        
+        // Récupérer les élèves avec pagination
+        $eleves = $elevesQuery->paginate(20)->withQueryString();
+        
+        return view('semestre1.eleves', compact(
+            'anneeScolaireActive', 
+            'niveaux', 
+            'classes', 
+            'eleves', 
+            'niveau_id', 
+            'classe_id'
+        ));
+    }
 
- 
-/**
- * Affiche les données détaillées pour le semestre 1
+    /**
+ * Affiche les notes des élèves par discipline
  */
 /**
- * Affiche le formulaire d'édition des données détaillées
+ * Affiche les notes des élèves par discipline
  */
-
- public function donneesDetailees(Request $request)
+public function disciplinesNotes(Request $request)
 {
     $anneeScolaireActive = AnneeScolaire::where('active', true)->first();
     if (!$anneeScolaireActive) {
-        return redirect()->route('parametres.index')->with('error', 'Aucune année scolaire active.');
+        return redirect()->route('parametres.index')->with('error', 'Aucune année scolaire active. Veuillez en configurer une d\'abord.');
     }
     
     $niveaux = Niveau::where('actif', true)->orderBy('libelle')->get();
@@ -411,326 +387,235 @@ class Semestre1Controller extends Controller
     // Récupérer les élèves avec pagination
     $eleves = $elevesQuery->paginate(20)->withQueryString();
     
-    // Récupérer toutes les disciplines principales
-    $disciplines = Discipline::where('type', 'principale')
-                  ->orderBy('libelle')
-                  ->get();
-    
-    // Récupérer les données détaillées pour les élèves
-    $eleveIds = $eleves->pluck('id')->toArray();
-    $donneesDetailees = DonneeDetaillee::where('annee_scolaire_id', $anneeScolaireActive->id)
-                        ->where('semestre', 1)
-                        ->whereIn('eleve_id', $eleveIds)
-                        ->get();
-    
-    // Organiser les données par élève et discipline
-    $donnees = [];
-    foreach ($donneesDetailees as $donnee) {
-        if (!isset($donnees[$donnee->eleve_id])) {
-            $donnees[$donnee->eleve_id] = [];
-        }
-        
-        if (!isset($donnees[$donnee->eleve_id][$donnee->discipline_id])) {
-            $donnees[$donnee->eleve_id][$donnee->discipline_id] = [];
-        }
-        
-        $donnees[$donnee->eleve_id][$donnee->discipline_id][$donnee->type] = $donnee->valeur;
-    }
-    
-    return view('semestre1.donnees_detaillees', compact(
-        'anneeScolaireActive',
-        'niveaux',
-        'classes',
-        'eleves',
-        'disciplines',
-        'donnees',
-        'niveau_id',
-        'classe_id'
-    ));
-}
-public function donneesDetailleesEdit(Request $request)
-{
-    $anneeScolaireActive = AnneeScolaire::where('active', true)->first();
-    if (!$anneeScolaireActive) {
-        return redirect()->route('parametres.index')->with('error', 'Aucune année scolaire active.');
-    }
-    
-    $niveaux = Niveau::where('actif', true)->orderBy('libelle')->get();
-    $classes = collect();
-    $eleves = collect();
-    $donneesExistantes = [];
-    
-    $niveau_id = $request->query('niveau_id');
-    $classe_id = $request->query('classe_id');
-    
-    if ($niveau_id) {
-        $classes = Classe::where('niveau_id', $niveau_id)
-                    ->where('actif', true)
-                    ->orderBy('libelle')
-                    ->get();
-    }
-    
+    // Récupérer les disciplines pour les élèves de la classe sélectionnée
+    // En utilisant les notes existantes pour déterminer les disciplines disponibles
+    $disciplineIds = [];
     if ($classe_id) {
-        // Récupérer les élèves de la classe
-        $eleves = Eleve::where('classe_id', $classe_id)
+        $disciplineIds = NoteS1::whereHas('eleve', function($query) use ($classe_id, $anneeScolaireActive) {
+                    $query->where('classe_id', $classe_id)
+                          ->where('annee_scolaire_id', $anneeScolaireActive->id);
+                })
                 ->where('annee_scolaire_id', $anneeScolaireActive->id)
-                ->orderBy('nom')
-                ->orderBy('prenom')
-                ->get();
-        
-        // Récupérer les données détaillées existantes
-        $donneesDetailees = DonneeDetaillee::where('annee_scolaire_id', $anneeScolaireActive->id)
-                            ->where('semestre', 1)
-                            ->whereIn('eleve_id', $eleves->pluck('id'))
-                            ->get();
-        
-        // Organiser les données par élève et discipline
-        foreach ($donneesDetailees as $donnee) {
-            if (!isset($donneesExistantes[$donnee->eleve_id])) {
-                $donneesExistantes[$donnee->eleve_id] = [];
-            }
-            
-            if (!isset($donneesExistantes[$donnee->eleve_id][$donnee->discipline_id])) {
-                $donneesExistantes[$donnee->eleve_id][$donnee->discipline_id] = [];
-            }
-            
-            $donneesExistantes[$donnee->eleve_id][$donnee->discipline_id][$donnee->type] = $donnee->valeur;
-        }
+                ->distinct('discipline_id')
+                ->pluck('discipline_id')
+                ->toArray();
+    } else {
+        // Si pas de classe spécifique, prendre toutes les disciplines utilisées
+        $disciplineIds = NoteS1::where('annee_scolaire_id', $anneeScolaireActive->id)
+                ->distinct('discipline_id')
+                ->pluck('discipline_id')
+                ->toArray();
     }
     
-    // Récupérer toutes les disciplines principales
-    $disciplines = Discipline::where('type', 'principale')
-                  ->orderBy('libelle')
-                  ->get();
+    // Récupérer les disciplines avec leurs détails
+    $disciplines = Discipline::whereIn('id', $disciplineIds)
+                 ->orderBy('libelle')
+                 ->get();
     
-    return view('semestre1.donnees_detaillees_edit', compact(
+    // Récupérer toutes les notes pour les élèves de la page actuelle
+    $eleveIds = $eleves->pluck('id')->toArray();
+    $notes = NoteS1::whereIn('eleve_id', $eleveIds)
+             ->whereIn('discipline_id', $disciplineIds)
+             ->where('annee_scolaire_id', $anneeScolaireActive->id)
+             ->get();
+    
+    // Organiser les notes par élève et discipline
+    $notesByEleve = [];
+    foreach ($notes as $note) {
+        if (!isset($notesByEleve[$note->eleve_id])) {
+            $notesByEleve[$note->eleve_id] = [];
+        }
+        
+        $notesByEleve[$note->eleve_id][$note->discipline_id] = $note;
+    }
+    
+    return view('semestre1.disciplines_notes', compact(
         'anneeScolaireActive',
         'niveaux',
         'classes',
         'eleves',
         'disciplines',
-        'donneesExistantes',
+        'notesByEleve',
         'niveau_id',
         'classe_id'
     ));
 }
-
-/**
- * Enregistre les données détaillées
- */
-public function donneesDetailleesStore(Request $request)
-{
-    $anneeScolaireActive = AnneeScolaire::where('active', true)->first();
-    if (!$anneeScolaireActive) {
-        return redirect()->route('parametres.index')->with('error', 'Aucune année scolaire active.');
+    
+    /**
+     * Affiche les détails d'un élève spécifique pour le semestre 1
+     */
+    public function eleveDetails($id)
+    {
+        $anneeScolaireActive = AnneeScolaire::where('active', true)->first();
+        
+        $eleve = Eleve::with([
+                'moyenneGeneraleS1',
+                'notesS1.discipline',
+                'classe.niveau'
+            ])
+            ->where('id', $id)
+            ->where('annee_scolaire_id', $anneeScolaireActive->id)
+            ->firstOrFail();
+        
+        return view('semestre1.eleve_details', compact('anneeScolaireActive', 'eleve'));
     }
     
-    $classe_id = $request->input('classe_id');
-    $semestre = $request->input('semestre', 1);
-    $data = $request->input('data', []);
-    
-    // Commencer une transaction
-    DB::beginTransaction();
-    
-    try {
-        // Pour chaque élève
-        foreach ($data as $eleveData) {
-            $eleve_id = $eleveData['eleve_id'];
-            
-            // Pour chaque discipline
-            foreach ($eleveData['disciplines'] as $discipline_id => $values) {
-                // Pour chaque type de données (moy_dd, comp_d, moy_d, rang_d)
-                foreach ($values as $type => $valeur) {
-                    if ($valeur === '') continue; // Ignorer les valeurs vides
-                    
-                    // Convertir en float ou int selon le type
-                    if ($type === 'rang_d') {
-                        $valeur = (int) $valeur;
-                    } else {
-                        $valeur = (float) str_replace(',', '.', $valeur);
-                    }
-                    
-                    // Enregistrer ou mettre à jour la donnée
-                    DonneeDetaillee::updateOrCreate(
-                        [
-                            'eleve_id' => $eleve_id,
-                            'discipline_id' => $discipline_id,
-                            'type' => $type,
-                            'annee_scolaire_id' => $anneeScolaireActive->id,
-                            'semestre' => $semestre
-                        ],
-                        [
-                            'valeur' => $valeur
-                        ]
-                    );
-                }
-            }
+    /**
+     * Exporte la liste des élèves en PDF
+     */
+    public function exportPdf(Request $request)
+    {
+        $anneeScolaireActive = AnneeScolaire::where('active', true)->first();
+        if (!$anneeScolaireActive) {
+            return redirect()->route('parametres.index')->with('error', 'Aucune année scolaire active. Veuillez en configurer une d\'abord.');
         }
         
-        DB::commit();
-        return redirect()->route('semestre1.donnees-detaillees')->with('success', 'Données détaillées enregistrées avec succès.');
+        // Récupérer les paramètres de filtrage
+        $niveau_id = $request->query('niveau_id');
+        $classe_id = $request->query('classe_id');
+        $sexe = $request->query('sexe');
+        $moyenne_min = $request->query('moyenne_min');
+        $moyenne_max = $request->query('moyenne_max');
+        $admis_only = $request->query('admis_only');
+        $sort_by = $request->query('sort_by', 'nom');
         
-    } catch (\Exception $e) {
-        DB::rollBack();
-        return back()->with('error', 'Erreur lors de l\'enregistrement des données: ' . $e->getMessage());
+        // Préparer les informations sur les filtres pour le PDF
+        $filtres = [];
+        
+        if ($niveau_id) {
+            $niveau = Niveau::find($niveau_id);
+            $filtres['Niveau'] = $niveau ? $niveau->libelle : '';
+        }
+        
+        if ($classe_id) {
+            $classe = Classe::find($classe_id);
+            $filtres['Classe'] = $classe ? $classe->libelle : '';
+        }
+        
+        if ($sexe) {
+            $filtres['Sexe'] = $sexe == 'M' ? 'Masculin' : 'Féminin';
+        }
+        
+        if ($moyenne_min !== null) {
+            $filtres['Moyenne min'] = $moyenne_min;
+        }
+        
+        if ($moyenne_max !== null) {
+            $filtres['Moyenne max'] = $moyenne_max;
+        }
+        
+        if ($admis_only) {
+            $filtres['Admis uniquement'] = 'Oui';
+        }
+        
+        switch ($sort_by) {
+            case 'moyenne_desc':
+                $filtres['Tri'] = 'Moyenne (décroissante)';
+                break;
+            case 'moyenne_asc':
+                $filtres['Tri'] = 'Moyenne (croissante)';
+                break;
+            case 'rang':
+                $filtres['Tri'] = 'Rang';
+                break;
+            default:
+                $filtres['Tri'] = 'Nom';
+                break;
+        }
+        
+        // Initialiser la requête des élèves avec les relations nécessaires
+        $elevesQuery = Eleve::with(['moyenneGeneraleS1', 'classe.niveau'])
+                      ->where('eleves.annee_scolaire_id', $anneeScolaireActive->id);
+        
+        // Appliquer les filtres
+        if ($classe_id) {
+            $elevesQuery->where('eleves.classe_id', $classe_id);
+        } elseif ($niveau_id) {
+            $elevesQuery->whereHas('classe', function($query) use ($niveau_id) {
+                $query->where('niveau_id', $niveau_id);
+            });
+        }
+        
+        if ($sexe) {
+            $elevesQuery->where('eleves.sexe', $sexe);
+        }
+        
+        // Filtrer par moyenne
+        if ($moyenne_min !== null || $moyenne_max !== null || $admis_only) {
+            $elevesQuery->whereHas('moyenneGeneraleS1', function($query) use ($moyenne_min, $moyenne_max, $admis_only, $anneeScolaireActive) {
+                $query->where('moyennes_generales_s1.annee_scolaire_id', $anneeScolaireActive->id);
+                
+                if ($moyenne_min !== null) {
+                    $query->where('moyennes_generales_s1.moyenne', '>=', $moyenne_min);
+                }
+                
+                if ($moyenne_max !== null) {
+                    $query->where('moyennes_generales_s1.moyenne', '<=', $moyenne_max);
+                }
+                
+                if ($admis_only) {
+                    $query->where('moyennes_generales_s1.moyenne', '>=', 10);
+                }
+            });
+        }
+        
+        // Appliquer le tri
+        switch ($sort_by) {
+            case 'moyenne_desc':
+                $elevesQuery->join('moyennes_generales_s1', function($join) use ($anneeScolaireActive) {
+                        $join->on('eleves.id', '=', 'moyennes_generales_s1.eleve_id')
+                             ->where('moyennes_generales_s1.annee_scolaire_id', '=', $anneeScolaireActive->id);
+                    })
+                    ->select('eleves.*')
+                    ->orderByDesc('moyennes_generales_s1.moyenne');
+                break;
+            case 'moyenne_asc':
+                $elevesQuery->join('moyennes_generales_s1', function($join) use ($anneeScolaireActive) {
+                        $join->on('eleves.id', '=', 'moyennes_generales_s1.eleve_id')
+                             ->where('moyennes_generales_s1.annee_scolaire_id', '=', $anneeScolaireActive->id);
+                    })
+                    ->select('eleves.*')
+                    ->orderBy('moyennes_generales_s1.moyenne');
+                break;
+            case 'rang':
+                $elevesQuery->join('moyennes_generales_s1', function($join) use ($anneeScolaireActive) {
+                        $join->on('eleves.id', '=', 'moyennes_generales_s1.eleve_id')
+                             ->where('moyennes_generales_s1.annee_scolaire_id', '=', $anneeScolaireActive->id);
+                    })
+                    ->select('eleves.*')
+                    ->orderBy('moyennes_generales_s1.rang');
+                break;
+            default: // Cas 'nom' ou autre
+                $elevesQuery->orderBy('eleves.classe_id')
+                    ->orderBy('eleves.nom')
+                    ->orderBy('eleves.prenom');
+                break;
+        }
+        
+        // Récupérer tous les élèves pour le PDF
+        $eleves = $elevesQuery->get();
+        
+        // Calculer le nombre total de pages (approximatif, environ 25 élèves par page)
+        $totalPages = ceil($eleves->count() / 25);
+        
+        // Configurer le PDF
+        $pdf = Pdf::loadView('semestre1.eleves_pdf', [
+            'eleves' => $eleves,
+            'anneeScolaireActive' => $anneeScolaireActive,
+            'dateExport' => now()->format('d/m/Y H:i'),
+            'filtres' => $filtres,
+            'page' => 1,
+            'totalPages' => $totalPages
+        ]);
+        
+        // Options du PDF
+        $pdf->setPaper('a4', 'landscape');
+        $pdf->setOption('margin-bottom', 20);
+        
+        // Nom du fichier
+        $fileName = 'eleves_semestre1_' . date('Y-m-d_His') . '.pdf';
+        
+        // Télécharger le PDF
+        return $pdf->download($fileName);
     }
-}
-/**
- * Exporte la liste des élèves en PDF
- */
-public function exportPdf(Request $request)
-{
-    $anneeScolaireActive = AnneeScolaire::where('active', true)->first();
-    if (!$anneeScolaireActive) {
-        return redirect()->route('parametres.index')->with('error', 'Aucune année scolaire active. Veuillez en configurer une d\'abord.');
-    }
-    
-    // Récupérer les paramètres de filtrage
-    $niveau_id = $request->query('niveau_id');
-    $classe_id = $request->query('classe_id');
-    $sexe = $request->query('sexe');
-    $moyenne_min = $request->query('moyenne_min');
-    $moyenne_max = $request->query('moyenne_max');
-    $admis_only = $request->query('admis_only');
-    $sort_by = $request->query('sort_by', 'nom');
-    
-    // Préparer les informations sur les filtres pour le PDF
-    $filtres = [];
-    
-    if ($niveau_id) {
-        $niveau = Niveau::find($niveau_id);
-        $filtres['Niveau'] = $niveau ? $niveau->libelle : '';
-    }
-    
-    if ($classe_id) {
-        $classe = Classe::find($classe_id);
-        $filtres['Classe'] = $classe ? $classe->libelle : '';
-    }
-    
-    if ($sexe) {
-        $filtres['Sexe'] = $sexe == 'M' ? 'Masculin' : 'Féminin';
-    }
-    
-    if ($moyenne_min !== null) {
-        $filtres['Moyenne min'] = $moyenne_min;
-    }
-    
-    if ($moyenne_max !== null) {
-        $filtres['Moyenne max'] = $moyenne_max;
-    }
-    
-    if ($admis_only) {
-        $filtres['Admis uniquement'] = 'Oui';
-    }
-    
-    switch ($sort_by) {
-        case 'moyenne_desc':
-            $filtres['Tri'] = 'Moyenne (décroissante)';
-            break;
-        case 'moyenne_asc':
-            $filtres['Tri'] = 'Moyenne (croissante)';
-            break;
-        case 'rang':
-            $filtres['Tri'] = 'Rang';
-            break;
-        default:
-            $filtres['Tri'] = 'Nom';
-            break;
-    }
-    
-    // Initialiser la requête des élèves avec les relations nécessaires
-    $elevesQuery = Eleve::with(['moyenneGeneraleS1', 'classe.niveau'])
-                  ->where('eleves.annee_scolaire_id', $anneeScolaireActive->id);
-    
-    // Appliquer les filtres
-    if ($classe_id) {
-        $elevesQuery->where('eleves.classe_id', $classe_id);
-    } elseif ($niveau_id) {
-        $elevesQuery->whereHas('classe', function($query) use ($niveau_id) {
-            $query->where('niveau_id', $niveau_id);
-        });
-    }
-    
-    if ($sexe) {
-        $elevesQuery->where('eleves.sexe', $sexe);
-    }
-    
-    // Filtrer par moyenne
-    if ($moyenne_min !== null || $moyenne_max !== null || $admis_only) {
-        $elevesQuery->whereHas('moyenneGeneraleS1', function($query) use ($moyenne_min, $moyenne_max, $admis_only, $anneeScolaireActive) {
-            $query->where('moyennes_generales_s1.annee_scolaire_id', $anneeScolaireActive->id);
-            
-            if ($moyenne_min !== null) {
-                $query->where('moyennes_generales_s1.moyenne', '>=', $moyenne_min);
-            }
-            
-            if ($moyenne_max !== null) {
-                $query->where('moyennes_generales_s1.moyenne', '<=', $moyenne_max);
-            }
-            
-            if ($admis_only) {
-                $query->where('moyennes_generales_s1.moyenne', '>=', 10);
-            }
-        });
-    }
-    
-    // Appliquer le tri
-    switch ($sort_by) {
-        case 'moyenne_desc':
-            $elevesQuery->join('moyennes_generales_s1', function($join) use ($anneeScolaireActive) {
-                    $join->on('eleves.id', '=', 'moyennes_generales_s1.eleve_id')
-                         ->where('moyennes_generales_s1.annee_scolaire_id', '=', $anneeScolaireActive->id);
-                })
-                ->select('eleves.*')
-                ->orderByDesc('moyennes_generales_s1.moyenne');
-            break;
-        case 'moyenne_asc':
-            $elevesQuery->join('moyennes_generales_s1', function($join) use ($anneeScolaireActive) {
-                    $join->on('eleves.id', '=', 'moyennes_generales_s1.eleve_id')
-                         ->where('moyennes_generales_s1.annee_scolaire_id', '=', $anneeScolaireActive->id);
-                })
-                ->select('eleves.*')
-                ->orderBy('moyennes_generales_s1.moyenne');
-            break;
-        case 'rang':
-            $elevesQuery->join('moyennes_generales_s1', function($join) use ($anneeScolaireActive) {
-                    $join->on('eleves.id', '=', 'moyennes_generales_s1.eleve_id')
-                         ->where('moyennes_generales_s1.annee_scolaire_id', '=', $anneeScolaireActive->id);
-                })
-                ->select('eleves.*')
-                ->orderBy('moyennes_generales_s1.rang');
-            break;
-        default: // Cas 'nom' ou autre
-            $elevesQuery->orderBy('eleves.classe_id')
-                ->orderBy('eleves.nom')
-                ->orderBy('eleves.prenom');
-            break;
-    }
-    
-    // Récupérer tous les élèves pour le PDF
-    $eleves = $elevesQuery->get();
-    
-    // Calculer le nombre total de pages (approximatif, environ 25 élèves par page)
-    $totalPages = ceil($eleves->count() / 25);
-    
-    // Configurer le PDF
-    $pdf = Pdf::loadView('semestre1.eleves_pdf', [
-        'eleves' => $eleves,
-        'anneeScolaireActive' => $anneeScolaireActive,
-        'dateExport' => now()->format('d/m/Y H:i'),
-        'filtres' => $filtres,
-        'page' => 1,
-        'totalPages' => $totalPages
-    ]);
-    
-    // Options du PDF
-    $pdf->setPaper('a4', 'landscape');
-    $pdf->setOption('margin-bottom', 20);
-    
-    // Nom du fichier
-    $fileName = 'eleves_semestre1_' . date('Y-m-d_His') . '.pdf';
-    
-    // Télécharger le PDF
-    return $pdf->download($fileName);
-}
 }

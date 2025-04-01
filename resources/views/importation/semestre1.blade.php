@@ -142,63 +142,6 @@
     </div>
 </div>
 
-<!-- Historique des importations -->
-<div class="card">
-    <div class="card-header header-success">
-        <i class="fas fa-history me-2"></i>Historique des importations - Semestre 1
-    </div>
-    <div class="card-body">
-        <div class="table-responsive">
-            <table class="table table-striped datatable">
-                <thead>
-                    <tr>
-                        <th>Niveau</th>
-                        <th>Classe</th>
-                        <th>Fichier</th>
-                        <th>Date</th>
-                        <th>Nb élèves</th>
-                        <th>Nb disciplines</th>
-                        <th>Statut</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse($importHistory as $import)
-                    <tr>
-                        <td>{{ $import->niveau->libelle }}</td>
-                        <td>{{ $import->classe->libelle }}</td>
-                        <td>{{ $import->fichier_original }}</td>
-                        <td>{{ $import->created_at->format('d/m/Y H:i') }}</td>
-                        <td>{{ $import->nb_eleves }}</td>
-                        <td>{{ $import->nb_disciplines }}</td>
-                        <td>
-                            @if($import->statut == 'complet')
-                                <span class="badge bg-success">Complet</span>
-                            @elseif($import->statut == 'en_cours')
-                                <span class="badge bg-warning">En cours</span>
-                            @elseif($import->statut == 'erreur')
-                                <span class="badge bg-danger">Erreur</span>
-                            @elseif($import->statut == 'erreur_format')
-                                <span class="badge bg-danger">Erreur de format</span>
-                            @endif
-                        </td>
-                        <td>
-                            <a href="{{ route('importation.show', $import->id) }}" class="btn btn-sm btn-info text-white">
-                                <i class="fas fa-eye"></i> Voir
-                            </a>
-                        </td>
-                    </tr>
-                    @empty
-                    <tr>
-                        <td colspan="8" class="text-center">Aucune importation enregistrée</td>
-                    </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
-
 <!-- Loader pour l'importation -->
 <div class="progress d-none" id="progressContainer">
     <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100" style="width: 100%"></div>
@@ -238,7 +181,12 @@
             $('#progressContainer').removeClass('d-none');
         });
         
-        // Initialiser DataTable
+        // Initialiser DataTable en vérifiant d'abord si elle est déjà initialisée
+        if ($.fn.DataTable.isDataTable('.datatable')) {
+            $('.datatable').DataTable().destroy();
+        }
+        
+        // Puis réinitialiser
         $('.datatable').DataTable({
             language: {
                 url: '//cdn.datatables.net/plug-ins/1.11.5/i18n/fr-FR.json'

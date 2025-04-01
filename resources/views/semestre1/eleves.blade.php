@@ -167,14 +167,15 @@
             <div>
                 <i class="fas fa-list me-2"></i>Résultats ({{ $eleves->total() }} élèves)
             </div>
-            <div class="btn-group">
-                <a href="{{ route('semestre1.donnees-detaillees', request()->query()) }}" class="btn btn-sm btn-info text-white">
-                    <i class="fas fa-table me-1"></i>Données détaillées
-                </a>
-                <a href="{{ route('semestre1.eleves.export.pdf', request()->query()) }}" class="btn btn-sm btn-danger" target="_blank">
-                    <i class="fas fa-file-pdf me-1"></i>Exporter en PDF
-                </a>
-            </div>
+            <!-- Dans la section des boutons d'action (généralement dans l'en-tête de la carte) -->
+                <div class="btn-group">
+                    <a href="{{ route('semestre1.eleves.export.pdf', request()->query()) }}" class="btn btn-sm btn-danger" target="_blank">
+                        <i class="fas fa-file-pdf me-1"></i>Exporter en PDF
+                    </a>
+                    <a href="{{ route('semestre1.disciplines-notes', request()->query()) }}" class="btn btn-sm btn-info text-white">
+                        <i class="fas fa-table me-1"></i>Voir notes par discipline
+                    </a>
+                </div>
         </div>
     </div>
     <div class="card-body">

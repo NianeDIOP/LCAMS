@@ -1,6 +1,6 @@
 @extends('layouts.module')
 
-@section('title', 'Semestre 1 - Données détaillées')
+@section('title', 'Semestre 1 - Notes par discipline')
 
 @section('sidebar')
 <div class="nav-title">Semestre 1</div>
@@ -27,16 +27,9 @@
 </li>
 
 <li class="nav-item">
-    <a class="nav-link" href="{{ route('semestre1.eleves') }}">
+    <a class="nav-link active" href="{{ route('semestre1.eleves') }}">
         <span class="nav-icon"><i class="fas fa-user-graduate"></i></span>
         <span>Liste des élèves</span>
-    </a>
-</li>
-
-<li class="nav-item">
-    <a class="nav-link active" href="{{ route('semestre1.donnees-detaillees') }}">
-        <span class="nav-icon"><i class="fas fa-table"></i></span>
-        <span>Données détaillées</span>
     </a>
 </li>
 
@@ -80,9 +73,9 @@
 
 @section('content')
 <h1 class="page-title">
-    <i class="fas fa-table me-2"></i>Données détaillées - Semestre 1
+    <i class="fas fa-table me-2"></i>Notes par discipline - Semestre 1
 </h1>
-<p class="page-subtitle">Consultez les notes détaillées par discipline pour le premier semestre de l'année scolaire {{ $anneeScolaireActive->libelle }}.</p>
+<p class="page-subtitle">Consultez les notes par discipline pour le premier semestre de l'année scolaire {{ $anneeScolaireActive->libelle }}.</p>
 
 <!-- Filtres -->
 <div class="card mb-3">
@@ -97,7 +90,7 @@
         </div>
     </div>
     <div class="card-body p-3 collapse" id="filterCollapse">
-        <form action="{{ route('semestre1.donnees-detaillees') }}" method="GET" id="filter-form">
+        <form action="{{ route('semestre1.disciplines-notes') }}" method="GET" id="filter-form">
             <div class="row g-2 mb-2">
                 <div class="col-md-4">
                     <label for="niveau_id" class="form-label small">Niveau</label>
@@ -141,43 +134,43 @@
     </div>
 </div>
 
-<!-- Données détaillées -->
+<!-- Tableau des notes par discipline -->
 <div class="card">
     <div class="card-header header-success d-flex justify-content-between align-items-center">
         <div>
-            <i class="fas fa-table me-2"></i>Notes détaillées par discipline ({{ $eleves->total() }} élèves)
+            <i class="fas fa-table me-2"></i>Notes par discipline ({{ $eleves->total() }} élèves)
         </div>
         <div>
-            <a href="{{ route('semestre1.donnees-detaillees.edit', request()->query()) }}" class="btn btn-sm btn-success me-2">
-                <i class="fas fa-edit me-1"></i>Éditer les données
+            <a href="{{ route('semestre1.eleves', request()->query()) }}" class="btn btn-sm btn-secondary">
+                <i class="fas fa-arrow-left me-1"></i>Retour à la liste
             </a>
-            <a href="#" class="btn btn-sm btn-danger" onclick="alert('Fonctionnalité d\'export en cours de développement')">
-                <i class="fas fa-file-pdf me-1"></i>Exporter en PDF
+            <a href="#" class="btn btn-sm btn-danger" onclick="window.print()">
+                <i class="fas fa-print me-1"></i>Imprimer
             </a>
         </div>
     </div>
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table table-bordered table-sm m-0">
-                <thead>
-                    <tr>
-                        <th class="text-center align-middle" rowspan="2">IEN</th>
-                        <th class="text-center align-middle" rowspan="2">Prénom</th>
-                        <th class="text-center align-middle" rowspan="2">Nom</th>
-                        
-                        @foreach($disciplines as $discipline)
-                            <th class="text-center" colspan="4">{{ $discipline->libelle }}</th>
-                        @endforeach
-                    </tr>
-                    <tr>
-                        @foreach($disciplines as $discipline)
-                            <th class="text-center">Moy DD</th>
-                            <th class="text-center">Comp D</th>
-                            <th class="text-center bg-light">Moy D</th>
-                            <th class="text-center">Rang D</th>
-                        @endforeach
-                    </tr>
-                </thead>
+            <thead>
+                <tr>
+                    <th class="text-center align-middle" rowspan="2">IEN</th>
+                    <th class="text-center align-middle" rowspan="2">Prénom</th>
+                    <th class="text-center align-middle" rowspan="2">Nom</th>
+                    
+                    @foreach($disciplines as $discipline)
+                        <th class="text-center align-middle">
+                            @if($discipline->type == 'sous-discipline' && $discipline->disciplineParent)
+                                {{ $discipline->disciplineParent->libelle }} [{{ $discipline->libelle }}]
+                            @else
+                                {{ $discipline->libelle }}
+                            @endif
+                        </th>
+                    @endforeach
+                    
+                    <th class="text-center align-middle">Moyenne</th>
+                </tr>
+            </thead>
                 <tbody>
                     @forelse($eleves as $eleve)
                     <tr>
@@ -187,20 +180,21 @@
                         
                         @foreach($disciplines as $discipline)
                             @php
-                                $note = $notesByEleveAndDiscipline[$eleve->id][$discipline->id] ?? null;
+                                $note = isset($notesByEleve[$eleve->id][$discipline->id]) ? $notesByEleve[$eleve->id][$discipline->id] : null;
+                                $moyD = $note && $note->moy_d !== null ? number_format($note->moy_d, 2) : '-';
+                                $textClass = $note && $note->moy_d !== null ? ($note->moy_d >= 10 ? 'text-success' : 'text-danger') : '';
                             @endphp
                             
-                            <td class="text-center">{{ $note && $note->moy_dd !== null ? number_format($note->moy_dd, 2) : '-' }}</td>
-                            <td class="text-center">{{ $note && $note->comp_d !== null ? number_format($note->comp_d, 2) : '-' }}</td>
-                            <td class="text-center bg-light {{ $note && $note->moy_d >= 10 ? 'text-success' : 'text-danger' }} fw-bold">
-                                {{ $note && $note->moy_d !== null ? number_format($note->moy_d, 2) : '-' }}
-                            </td>
-                            <td class="text-center">{{ $note && $note->rang_d ? $note->rang_d : '-' }}</td>
+                            <td class="text-center {{ $textClass }} fw-bold">{{ $moyD }}</td>
                         @endforeach
+                        
+                        <td class="text-center bg-light {{ $eleve->moyenneGeneraleS1 && $eleve->moyenneGeneraleS1->moyenne >= 10 ? 'text-success' : 'text-danger' }} fw-bold">
+                            {{ $eleve->moyenneGeneraleS1 ? number_format($eleve->moyenneGeneraleS1->moyenne, 2) : '-' }}
+                        </td>
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="{{ 3 + (count($disciplines) * 4) }}" class="text-center">Aucun élève trouvé pour les critères sélectionnés.</td>
+                        <td colspan="{{ 3 + count($disciplines) + 1 }}" class="text-center">Aucun élève trouvé pour les critères sélectionnés.</td>
                     </tr>
                     @endforelse
                 </tbody>
@@ -209,6 +203,23 @@
         
         <div class="d-flex justify-content-center p-3">
             {{ $eleves->links('pagination::bootstrap-5') }}
+        </div>
+    </div>
+</div>
+
+<!-- Légende -->
+<div class="card mt-3">
+    <div class="card-header header-info">
+        <i class="fas fa-info-circle me-2"></i>Légende
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <p><strong>Notes en vert :</strong> Notes supérieures ou égales à 10/20</p>
+            </div>
+            <div class="col-md-6">
+                <p><strong>Notes en rouge :</strong> Notes inférieures à 10/20</p>
+            </div>
         </div>
     </div>
 </div>
@@ -221,45 +232,77 @@
         max-width: 100%;
     }
     
-    /* Style pour mettre en évidence la colonne Moy D */
     .bg-light {
         background-color: rgba(0, 123, 255, 0.1) !important;
     }
     
-    /* Styles supplémentaires pour la table */
     .table-bordered th,
     .table-bordered td {
         border: 1px solid #dee2e6;
+        font-size: 0.9rem;
     }
     
-    /* Ajuster la largeur des colonnes */
     .table th {
         white-space: nowrap;
         padding: 0.5rem;
     }
     
     .table td {
-        padding: 0.5rem;
+        padding: 0.4rem;
     }
     
     /* Figer les 3 premières colonnes */
-    th:nth-child(1), td:nth-child(1),
-    th:nth-child(2), td:nth-child(2),
-    th:nth-child(3), td:nth-child(3) {
+    .table th:nth-child(1), .table td:nth-child(1),
+    .table th:nth-child(2), .table td:nth-child(2),
+    .table th:nth-child(3), .table td:nth-child(3) {
         position: sticky;
         left: 0;
         background-color: white;
         z-index: 1;
     }
     
-    th:nth-child(1), td:nth-child(1) { left: 0; }
-    th:nth-child(2), td:nth-child(2) { left: 60px; }  /* Ajuster selon la largeur de la première colonne */
-    th:nth-child(3), td:nth-child(3) { left: 160px; } /* Ajuster selon la largeur des colonnes précédentes */
+    .table th:nth-child(1), .table td:nth-child(1) { left: 0; }
+    .table th:nth-child(2), .table td:nth-child(2) { left: 5rem; }
+    .table th:nth-child(3), .table td:nth-child(3) { left: 12rem; }
     
     tr:nth-child(odd) td:nth-child(1),
     tr:nth-child(odd) td:nth-child(2),
     tr:nth-child(odd) td:nth-child(3) {
-        background-color: #f2f2f2;
+        background-color: #f8f9fa;
+    }
+    
+    /* Pour les colonnes fixées des entêtes */
+    thead tr th:nth-child(1),
+    thead tr th:nth-child(2),
+    thead tr th:nth-child(3) {
+        background-color: #fff;
+        z-index: 2;
+    }
+    
+    @media print {
+        .btn, .card-header button, .sidebar, .topbar, .footer, .page-subtitle {
+            display: none !important;
+        }
+        
+        .main-content {
+            margin-left: 0 !important;
+            margin-top: 0 !important;
+            padding: 0 !important;
+        }
+        
+        .card {
+            border: none !important;
+            box-shadow: none !important;
+        }
+        
+        .page-title {
+            font-size: 18px !important;
+            margin-bottom: 10px !important;
+        }
+        
+        .table-responsive {
+            overflow: visible !important;
+        }
     }
 </style>
 @endsection
