@@ -308,7 +308,7 @@ class ExcelImportService
     /**
      * Traite l'onglet "Moyennes eleves" du fichier Excel
      * 
-     * @param \PhpOffice\PhpSpreadsheet\Spreadsheet $spreadsheet
+     * @param Spreadsheet $spreadsheet Instance du fichier Excel
      * @param array $classrooms Tableau des classes disponibles
      * @param int $gradeLevelId ID du niveau scolaire
      * @return array Statistiques d'importation
@@ -318,6 +318,7 @@ class ExcelImportService
         // Récupérer l'onglet "Moyennes eleves"
         $worksheet = $spreadsheet->getSheetByName('Moyennes eleves');
         
+        // Initialiser les statistiques
         $stats = [
             'total' => 0,
             'imported' => 0,
@@ -325,24 +326,85 @@ class ExcelImportService
             'errors' => 0
         ];
 
-        // Démarrer à la ligne 12 (après en-têtes)
-        $startRow = 12;
+        // Trouver les lignes de début et de fin des données
         $highestRow = $worksheet->getHighestDataRow();
+        $highestColumn = $worksheet->getHighestDataColumn();
         
+        // Trouver la ligne d'en-tête qui contient "Matricule", "Nom", "Prénom", etc.
+        $headerRow = null;
+        $matriculeCol = null;
+        $nomCol = null;
+        $prenomCol = null;
+        $classeCol = null;
+        $moyenneCol = null;
+        $rangCol = null;
+        $appreciationCol = null;
+        $sexeCol = null;
+
+        // Chercher la ligne d'en-tête 
+        for ($row = 1; $row <= 20; $row++) { // Limité aux 20 premières lignes
+            $foundMatricule = false;
+            $foundNom = false;
+            $foundPrenom = false;
+            $foundClasse = false;
+            $foundMoyenne = false;
+            
+            for ($col = 'A'; $col <= $highestColumn; $col++) {
+                $cellValue = trim($worksheet->getCell($col . $row)->getValue());
+                
+                if (stripos($cellValue, 'Matricule') !== false) {
+                    $matriculeCol = $col;
+                    $foundMatricule = true;
+                } elseif (strcasecmp($cellValue, 'Nom') === 0) {
+                    $nomCol = $col;
+                    $foundNom = true;
+                } elseif (strcasecmp($cellValue, 'Prénom') === 0) {
+                    $prenomCol = $col;
+                    $foundPrenom = true;
+                } elseif (strcasecmp($cellValue, 'Classe') === 0) {
+                    $classeCol = $col;
+                    $foundClasse = true;
+                } elseif (strcasecmp($cellValue, 'Moyenne') === 0) {
+                    $moyenneCol = $col;
+                    $foundMoyenne = true;
+                } elseif (strcasecmp($cellValue, 'Rang') === 0) {
+                    $rangCol = $col;
+                } elseif (stripos($cellValue, 'Appréciation') !== false) {
+                    $appreciationCol = $col;
+                } elseif (in_array(strtoupper($cellValue), ['SEXE', 'GENRE'])) {
+                    $sexeCol = $col;
+                }
+            }
+            
+            // Si toutes les colonnes essentielles sont trouvées
+            if ($foundMatricule && $foundNom && $foundPrenom && $foundClasse && $foundMoyenne) {
+                $headerRow = $row;
+                break;
+            }
+        }
+        
+        if ($headerRow === null) {
+            throw new Exception("La structure de l'onglet 'Moyennes eleves' ne correspond pas au format attendu. Impossible de trouver l'en-tête.", self::ERROR_INVALID_STRUCTURE);
+        }
+        
+        // Commencer à traiter les données à partir de la ligne suivant l'en-tête
+        $startRow = $headerRow + 1;
+        
+        // Parcourir les lignes de données
         for ($row = $startRow; $row <= $highestRow; $row++) {
             $stats['total']++;
             
-            // Lire les données de la ligne
-            $matricule = trim($worksheet->getCell('A' . $row)->getValue());
-            $nom = trim($worksheet->getCell('B' . $row)->getValue());
-            $prenom = trim($worksheet->getCell('C' . $row)->getValue());
-            $classe = trim($worksheet->getCell('D' . $row)->getValue());
-            $moyenne = $worksheet->getCell('E' . $row)->getValue();
-            $rang = $worksheet->getCell('F' . $row)->getValue();
-            $appreciation = $worksheet->getCell('G' . $row)->getValue() ?? '';
-            $sexe = $worksheet->getCell('H' . $row)->getValue() ?? null;
+            // Lire les données de l'élève
+            $matricule = $matriculeCol ? trim($worksheet->getCell($matriculeCol . $row)->getValue()) : '';
+            $nom = $nomCol ? trim($worksheet->getCell($nomCol . $row)->getValue()) : '';
+            $prenom = $prenomCol ? trim($worksheet->getCell($prenomCol . $row)->getValue()) : '';
+            $classe = $classeCol ? trim($worksheet->getCell($classeCol . $row)->getValue()) : '';
+            $moyenne = $moyenneCol ? $worksheet->getCell($moyenneCol . $row)->getValue() : null;
+            $rang = $rangCol ? $worksheet->getCell($rangCol . $row)->getValue() : null;
+            $appreciation = $appreciationCol ? $worksheet->getCell($appreciationCol . $row)->getValue() : '';
+            $sexe = $sexeCol ? trim($worksheet->getCell($sexeCol . $row)->getValue()) : null;
             
-            // Si les données essentielles sont manquantes, ignorer cette ligne
+            // Ignorer les lignes sans données essentielles
             if (empty($nom) || empty($prenom) || empty($classe) || !is_numeric($moyenne)) {
                 $stats['errors']++;
                 Log::info("Ligne {$row} ignorée: données manquantes ou invalides", [
@@ -372,8 +434,13 @@ class ExcelImportService
                     $student->matricule = $matricule ?: $this->generateStudentId($nom, $prenom);
                 }
                 
-                if (!empty($sexe) && in_array(strtoupper($sexe), ['M', 'F'])) {
-                    $student->sexe = strtoupper($sexe);
+                if (!empty($sexe)) {
+                    // Standardiser le sexe à M ou F
+                    if (in_array(strtoupper(substr($sexe, 0, 1)), ['M', 'G', 'H'])) {
+                        $student->sexe = 'M';
+                    } elseif (in_array(strtoupper(substr($sexe, 0, 1)), ['F'])) {
+                        $student->sexe = 'F';
+                    }
                 }
                 
                 $student->save();
@@ -382,18 +449,18 @@ class ExcelImportService
                 Semester1Average::updateOrCreate(
                     ['student_id' => $student->id],
                     [
-                        'moyenne' => $moyenne,
-                        'rang' => $rang,
-                        'appreciation' => $appreciation
+                        'moyenne' => (float) $moyenne,
+                        'rang' => $rang ?: null,
+                        'appreciation' => (string) $appreciation
                     ]
                 );
 
-                // Mettre à jour les statistiques
                 if ($isNewStudent) {
                     $stats['imported']++;
                 } else {
                     $stats['updated']++;
                 }
+                
             } catch (Exception $e) {
                 $stats['errors']++;
                 Log::warning("Erreur lors du traitement de la ligne {$row} de l'onglet Moyennes: " . $e->getMessage(), [
@@ -405,7 +472,7 @@ class ExcelImportService
             }
         }
 
-        // Recalcul des rangs par classe si nécessaire
+        // Recalcul des rangs par classe
         $this->recalculateAverageRanks($gradeLevelId);
 
         return $stats;
@@ -414,7 +481,7 @@ class ExcelImportService
     /**
      * Traite l'onglet "Données détaillées" du fichier Excel pour extraire les moyennes par discipline
      * 
-     * @param \PhpOffice\PhpSpreadsheet\Spreadsheet $spreadsheet
+     * @param Spreadsheet $spreadsheet Instance du fichier Excel
      * @param array $classrooms Tableau des classes disponibles
      * @param int $gradeLevelId ID du niveau scolaire
      * @return array Statistiques d'importation
@@ -430,43 +497,91 @@ class ExcelImportService
             'subjects' => []
         ];
 
-        // Démarrer à la ligne 9 (après en-têtes)
-        $startRow = 9;
-        $highestRow = $worksheet->getHighestDataRow();
-        $highestColumn = $worksheet->getHighestDataColumn();
-        $columnIndex = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($highestColumn);
-
-        // 1. Analyser l'en-tête pour trouver les disciplines et les colonnes "Moy D"
+        // Trouver les lignes pour les en-têtes et les noms de disciplines
+        $headerRow = null;
+        $disciplineRow = null;
+        $matriculeCol = null;
+        $nomCol = null;
+        $prenomCol = null;
+        $classeCol = null;
+        
+        // Chercher les lignes d'en-tête importantes
+        for ($row = 1; $row <= 20; $row++) { // Limité aux 20 premières lignes
+            $foundMatricule = false;
+            $foundNom = false;
+            $foundPrenom = false;
+            $foundMoyD = false;
+            
+            // Vérifier si c'est une ligne d'en-tête avec "Matricule", "Nom", "Prénom"
+            $highestColumn = $worksheet->getHighestDataColumn();
+            for ($col = 'A'; $col <= $highestColumn; $col++) {
+                $cellValue = trim($worksheet->getCell($col . $row)->getValue());
+                
+                if (stripos($cellValue, 'Matricule') !== false) {
+                    $matriculeCol = $col;
+                    $foundMatricule = true;
+                } elseif (strcasecmp($cellValue, 'Nom') === 0) {
+                    $nomCol = $col;
+                    $foundNom = true;
+                } elseif (strcasecmp($cellValue, 'Prénom') === 0) {
+                    $prenomCol = $col;
+                    $foundPrenom = true;
+                } elseif (strcasecmp($cellValue, 'Classe') === 0) {
+                    $classeCol = $col;
+                } elseif ($cellValue === 'Moy D') {
+                    $foundMoyD = true;
+                }
+            }
+            
+            // Si on trouve la ligne des en-têtes de colonnes (Matricule, Nom, Prénom)
+            if ($foundMatricule && $foundNom && $foundPrenom) {
+                $headerRow = $row;
+            }
+            
+            // Si on trouve au moins une colonne "Moy D", c'est potentiellement la ligne des sous-colonnes
+            if ($foundMoyD && $headerRow !== null) {
+                $disciplineRow = $row - 1; // La ligne des noms de disciplines est juste au-dessus
+                break;
+            }
+        }
+        
+        if ($headerRow === null || $disciplineRow === null) {
+            throw new Exception("La structure de l'onglet 'Données détaillées' ne correspond pas au format attendu. Impossible de trouver les en-têtes.", self::ERROR_INVALID_STRUCTURE);
+        }
+        
+        // Analyser les disciplines et leurs colonnes "Moy D"
         $disciplines = [];
         $moyDColumns = [];
+        $highestColumn = $worksheet->getHighestDataColumn();
         
-        // Récupérer les disciplines (ligne 7) et leurs sous-colonnes (ligne 8)
+        // Parcourir les colonnes pour trouver les disciplines et les "Moy D"
         $currentDiscipline = null;
         
-        for ($col = 4; $col <= $columnIndex; $col++) { // Commencer à partir de D (colonne 4)
-            $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col);
+        for ($col = 'A'; $col <= $highestColumn; $col++) {
+            // Récupérer le nom de la discipline (ligne au-dessus des en-têtes)
+            $disciplineName = trim($worksheet->getCell($col . $disciplineRow)->getValue());
             
-            // Récupérer le nom de la discipline sur la ligne 7
-            $disciplineName = trim($worksheet->getCell($colLetter . '7')->getValue());
-            
-            // Si la discipline n'est pas vide, la mémoriser
+            // Si on a un nom de discipline non vide
             if (!empty($disciplineName) && !str_contains($disciplineName, 'Unnamed')) {
                 $currentDiscipline = $disciplineName;
             }
             
-            // Vérifier si c'est une colonne "Moy D" sur la ligne 8
-            $subCol = trim($worksheet->getCell($colLetter . '8')->getValue());
+            // Vérifier si c'est une colonne "Moy D"
+            $subColHeader = trim($worksheet->getCell($col . $headerRow)->getValue());
             
-            if ($subCol === 'Moy D' && !empty($currentDiscipline)) {
-                $moyDColumns[$colLetter] = $currentDiscipline;
-                
-                // Créer ou récupérer la discipline dans la base de données
+            if ($subColHeader === 'Moy D' && !empty($currentDiscipline)) {
+                // Créer/récupérer la discipline dans la BDD
                 $subject = Subject::firstOrCreate(
                     ['nom' => $currentDiscipline],
                     ['active' => true]
                 );
                 
-                $disciplines[$colLetter] = [
+                $moyDColumns[$col] = [
+                    'name' => $currentDiscipline,
+                    'id' => $subject->id
+                ];
+                
+                $disciplines[$subject->id] = [
                     'name' => $currentDiscipline,
                     'id' => $subject->id,
                     'imported' => 0,
@@ -477,19 +592,24 @@ class ExcelImportService
         }
         
         if (empty($disciplines)) {
-            throw new Exception('Aucune discipline avec colonne "Moy D" n\'a été trouvée dans le fichier.', self::ERROR_INVALID_STRUCTURE);
+            throw new Exception('Aucune discipline avec colonne "Moy D" n\'a été trouvée dans l\'onglet "Données détaillées".', self::ERROR_INVALID_STRUCTURE);
         }
-
-        // 2. Pour chaque ligne, récupérer les infos de l'élève et les notes par discipline
+        
+        // Commencer à traiter les données à partir de la ligne suivant l'en-tête
+        $startRow = $headerRow + 1;
+        $highestRow = $worksheet->getHighestDataRow();
+        
+        // Parcourir les lignes de données pour traiter les notes
         for ($row = $startRow; $row <= $highestRow; $row++) {
             $stats['total']++;
             
-            // Informations de l'élève
-            $matricule = trim($worksheet->getCell('A' . $row)->getValue());
-            $nom = trim($worksheet->getCell('B' . $row)->getValue());
-            $prenom = trim($worksheet->getCell('C' . $row)->getValue());
+            // Lire les informations de l'élève
+            $matricule = $matriculeCol ? trim($worksheet->getCell($matriculeCol . $row)->getValue()) : '';
+            $nom = $nomCol ? trim($worksheet->getCell($nomCol . $row)->getValue()) : '';
+            $prenom = $prenomCol ? trim($worksheet->getCell($prenomCol . $row)->getValue()) : '';
+            $classe = $classeCol ? trim($worksheet->getCell($classeCol . $row)->getValue()) : '';
             
-            // Si les infos essentielles sont manquantes, ignorer cette ligne
+            // Ignorer les lignes sans données essentielles
             if (empty($nom) || empty($prenom)) {
                 $stats['errors']++;
                 Log::info("Ligne {$row} ignorée dans l'onglet Données détaillées: données élève manquantes", [
@@ -499,60 +619,76 @@ class ExcelImportService
                 continue;
             }
             
-            // Trouver l'élève dans la base de données
-            $student = Student::where('nom', $nom)
-                              ->where('prenom', $prenom)
-                              ->whereIn('classroom_id', array_values($classrooms))
-                              ->first();
+            // Trouver l'élève
+            $student = null;
             
+            // Si on a le matricule, chercher d'abord par matricule
+            if (!empty($matricule)) {
+                $student = Student::where('matricule', $matricule)->first();
+            }
+            
+            // Sinon chercher par nom, prénom et classe
+            if (!$student) {
+                $classroomQuery = Student::where('nom', $nom)->where('prenom', $prenom);
+                
+                if (!empty($classe) && isset($classrooms[$classe])) {
+                    $classroomQuery->where('classroom_id', $classrooms[$classe]);
+                } else {
+                    $classroomQuery->whereIn('classroom_id', array_values($classrooms));
+                }
+                
+                $student = $classroomQuery->first();
+            }
+            
+            // Si on ne trouve pas l'élève, passer à la ligne suivante
             if (!$student) {
                 $stats['errors']++;
-                Log::info("Élève non trouvé: {$nom} {$prenom} (ligne {$row})", [
-                    'classrooms' => array_values($classrooms)
+                Log::info("Élève non trouvé dans l'onglet Données détaillées: {$nom} {$prenom}", [
+                    'matricule' => $matricule,
+                    'classe' => $classe
                 ]);
                 continue;
             }
             
-            // Traiter chaque discipline (colonne "Moy D")
-            foreach ($disciplines as $colLetter => $discipline) {
+            // Traiter chaque discipline pour cet élève
+            foreach ($moyDColumns as $colLetter => $discipline) {
                 $note = $worksheet->getCell($colLetter . $row)->getValue();
                 
-                // Si la note est vide ou non numérique, ignorer cette cellule
+                // Ignorer les notes non numériques
                 if (!is_numeric($note)) {
-                    $disciplines[$colLetter]['errors']++;
                     continue;
                 }
                 
                 try {
-                    // Enregistrer la note pour cette discipline
+                    // Mettre à jour ou créer la note pour cette discipline
                     $mark = Semester1SubjectMark::updateOrCreate(
                         [
                             'student_id' => $student->id,
                             'subject_id' => $discipline['id']
                         ],
                         [
-                            'note' => $note
+                            'note' => (float) $note
                         ]
                     );
                     
-                    // Mettre à jour les statistiques pour cette discipline
+                    // Mettre à jour les statistiques
                     if ($mark->wasRecentlyCreated) {
-                        $disciplines[$colLetter]['imported']++;
+                        $disciplines[$discipline['id']]['imported']++;
                     } else {
-                        $disciplines[$colLetter]['updated']++;
+                        $disciplines[$discipline['id']]['updated']++;
                     }
                 } catch (Exception $e) {
-                    $disciplines[$colLetter]['errors']++;
+                    $disciplines[$discipline['id']]['errors']++;
                     Log::warning("Erreur lors du traitement de la note de {$nom} {$prenom} pour {$discipline['name']}: " . $e->getMessage(), [
                         'exception' => $e
                     ]);
                 }
             }
         }
-
-        // 3. Calculer les rangs pour chaque discipline
-        foreach ($disciplines as $discipline) {
-            $this->calculateSubjectRanks($discipline['id'], array_values($classrooms));
+        
+        // Calculer les rangs pour chaque discipline
+        foreach ($disciplines as $disciplineId => $stats) {
+            $this->calculateSubjectRanks($disciplineId, array_values($classrooms));
         }
 
         $stats['subjects'] = array_values($disciplines);
