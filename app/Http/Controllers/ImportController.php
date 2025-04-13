@@ -2,148 +2,198 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\GradeLevel;
 use App\Models\Classroom;
+use App\Models\GradeLevel;
 use App\Models\ImportHistory;
+use App\Models\Student;
 use App\Services\ExcelImportService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 
 class ImportController extends Controller
 {
     protected $importService;
-
+    
     public function __construct(ExcelImportService $importService)
     {
         $this->importService = $importService;
-        $this->middleware('auth');
     }
 
     /**
-     * Affiche la page d'importation
+     * Affiche la page d'importation Excel
      */
     public function index()
     {
         $gradeLevels = GradeLevel::where('active', true)->orderBy('order')->get();
-        $importHistory = ImportHistory::with('gradeLevel', 'user')
-            ->orderBy('created_at', 'desc')
-            ->limit(10)
-            ->get();
+        $importHistory = ImportHistory::with(['user', 'gradeLevel'])
+                                     ->latest()
+                                     ->limit(10)
+                                     ->get();
 
-        return view('admin.import.index', compact('gradeLevels', 'importHistory'));
+        return view('admin.import', compact('gradeLevels', 'importHistory'));
     }
 
     /**
-     * Traite l'importation du fichier Excel
+     * Récupère les classes pour un niveau scolaire donné
      */
-    public function store(Request $request)
+    public function getClassrooms(Request $request)
     {
-        // Validation des données
+        $gradeLevelId = $request->input('grade_level_id');
+        $classrooms = Classroom::where('grade_level_id', $gradeLevelId)
+                             ->where('active', true)
+                             ->orderBy('name')
+                             ->get();
+                             
+        return response()->json($classrooms);
+    }
+
+    /**
+     * Traite l'importation d'un fichier Excel
+     */
+    public function importExcel(Request $request)
+    {
         $validator = Validator::make($request->all(), [
             'excel_file' => 'required|file|mimes:xlsx,xls|max:10240',
             'grade_level_id' => 'required|exists:grade_levels,id',
-        ], [
-            'excel_file.required' => 'Veuillez sélectionner un fichier Excel à importer.',
-            'excel_file.file' => 'Le fichier sélectionné n\'est pas valide.',
-            'excel_file.mimes' => 'Le fichier doit être au format Excel (.xlsx ou .xls).',
-            'excel_file.max' => 'La taille du fichier ne doit pas dépasser 10 Mo.',
-            'grade_level_id.required' => 'Veuillez sélectionner un niveau scolaire.',
-            'grade_level_id.exists' => 'Le niveau scolaire sélectionné n\'existe pas.',
+            'classroom_id' => 'nullable|exists:classrooms,id',
+            'import_method' => 'required|in:standard,advanced',
         ]);
 
         if ($validator->fails()) {
-            return redirect()->back()
-                ->withErrors($validator)
-                ->withInput();
+            return response()->json([
+                'message' => 'Validation échouée',
+                'errors' => $validator->errors(),
+            ], 422);
         }
 
-        // Récupération du fichier uploadé
-        $file = $request->file('excel_file');
-        $userId = Auth::id();
+        try {
+            // Création d'un enregistrement d'importation
+            $importHistory = new ImportHistory();
+            $importHistory->user_id = Auth::id();
+            $importHistory->grade_level_id = $request->grade_level_id;
+            $importHistory->classroom_id = $request->classroom_id;
+            $importHistory->file_name = $request->file('excel_file')->getClientOriginalName();
+            $importHistory->status = 'en_cours';
+            $importHistory->method = $request->import_method;
+            $importHistory->save();
 
-        // Importation du fichier
-        $result = $this->importService->importCompleteExcelFile(
-            $file->getPathname(),
-            $request->grade_level_id,
-            $userId
-        );
+            // Traitement de l'importation
+            $filePath = $request->file('excel_file')->path();
+            $useAdvancedMethod = ($request->import_method === 'advanced');
 
-        if ($result['status'] === 'success') {
-            return redirect()->route('admin.import.show', $result['import_id'])
-                ->with('success', 'Le fichier a été importé avec succès.');
-        } else {
-            return redirect()->back()
-                ->with('error', 'Une erreur est survenue lors de l\'importation : ' . $result['message'])
-                ->withInput();
+            $result = $this->importService->import(
+                $filePath, 
+                $request->grade_level_id, 
+                $request->classroom_id,
+                $useAdvancedMethod
+            );
+
+            // Mise à jour de l'historique d'importation
+            $importHistory->status = 'terminé';
+            $importHistory->results = json_encode([
+                'total_students' => $result['total_students'] ?? 0,
+                'new_students' => $result['new_students'] ?? 0,
+                'updated_students' => $result['updated_students'] ?? 0,
+                'subjects_imported' => $result['subjects_imported'] ?? 0,
+                'errors' => $result['errors'] ?? [],
+            ]);
+            $importHistory->save();
+
+            return response()->json([
+                'message' => 'Importation réussie',
+                'stats' => [
+                    'total_students' => $result['total_students'] ?? 0,
+                    'new_students' => $result['new_students'] ?? 0,
+                    'updated_students' => $result['updated_students'] ?? 0,
+                    'subjects_imported' => $result['subjects_imported'] ?? 0,
+                    'errors' => count($result['errors'] ?? []),
+                ],
+                'import_id' => $importHistory->id,
+            ]);
+
+        } catch (\Exception $e) {
+            // Enregistrement de l'erreur
+            Log::error('Erreur lors de l\'importation : ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
+            
+            // Mise à jour de l'historique d'importation en cas d'échec
+            if (isset($importHistory)) {
+                $importHistory->status = 'échoué';
+                $importHistory->results = json_encode([
+                    'error' => $e->getMessage(),
+                    'error_code' => $e->getCode(),
+                ]);
+                $importHistory->save();
+            }
+
+            return response()->json([
+                'message' => 'Erreur lors de l\'importation : ' . $e->getMessage(),
+                'error_code' => $e->getCode(),
+            ], 500);
         }
     }
 
     /**
      * Affiche les détails d'une importation
      */
-    public function show($id)
+    public function showImportDetails($id)
     {
-        $import = ImportHistory::with('gradeLevel', 'user')->findOrFail($id);
-        $details = json_decode($import->details);
-
-        return view('admin.import.show', compact('import', 'details'));
-    }
-
-    /**
-     * Affiche l'historique des importations
-     */
-    public function history()
-    {
-        $imports = ImportHistory::with('gradeLevel', 'user')
-            ->orderBy('created_at', 'desc')
-            ->paginate(20);
-
-        return view('admin.import.history', compact('imports'));
-    }
-
-    /**
-     * Supprime une importation et ses données associées
-     */
-    public function destroy($id)
-    {
-        $import = ImportHistory::findOrFail($id);
+        $import = ImportHistory::with(['user', 'gradeLevel', 'classroom'])->findOrFail($id);
+        $results = json_decode($import->results, true) ?? [];
         
-        // Vérifier si l'importation est en cours
-        if ($import->status === 'en_cours') {
-            return redirect()->back()
-                ->with('error', 'Impossible de supprimer une importation en cours.');
-        }
-        
-        // Récupérer le niveau et ses classes
-        $gradeLevelId = $import->grade_level_id;
-        $classroomIds = Classroom::where('grade_level_id', $gradeLevelId)->pluck('id')->toArray();
-        
-        // Supprimer les données associées à ce niveau (à adapter selon vos besoins)
-        // Cette opération doit être effectuée avec prudence car elle supprime des données
-        // Vous devriez implémenter une logique de vérification supplémentaire
-
-        try {
-            \DB::beginTransaction();
-            
-            // Supprimer le fichier importé
-            if (Storage::disk('local')->exists($import->file_path)) {
-                Storage::disk('local')->delete($import->file_path);
+        // Si l'importation a réussi, rechercher les étudiants concernés
+        $students = collect();
+        if ($import->status === 'terminé' && isset($results['total_students'])) {
+            $query = Student::with(['classroom', 'semester1Average'])
+                         ->where('grade_level_id', $import->grade_level_id);
+                         
+            if ($import->classroom_id) {
+                $query->where('classroom_id', $import->classroom_id);
             }
             
-            // Supprimer l'enregistrement d'importation
+            $students = $query->orderBy('last_name')->get();
+        }
+        
+        return view('admin.import_details', compact('import', 'results', 'students'));
+    }
+
+    /**
+     * Supprime une importation et éventuellement les données associées
+     */
+    public function deleteImport(Request $request, $id)
+    {
+        try {
+            $import = ImportHistory::findOrFail($id);
+            
+            // Option pour supprimer également les données importées
+            $deleteAssociatedData = $request->input('delete_data', false);
+            
+            if ($deleteAssociatedData) {
+                // Supprimer les notes et moyennes associées à cette importation
+                // Cette logique dépendra de votre modèle de données
+                // ...
+            }
+            
+            // Supprimer l'enregistrement d'historique
             $import->delete();
             
-            \DB::commit();
+            return response()->json([
+                'success' => true,
+                'message' => 'Importation supprimée avec succès'
+            ]);
             
-            return redirect()->route('admin.import.history')
-                ->with('success', 'L\'importation a été supprimée avec succès.');
         } catch (\Exception $e) {
-            \DB::rollBack();
+            Log::error('Erreur lors de la suppression de l\'importation : ' . $e->getMessage());
             
-            return redirect()->back()
-                ->with('error', 'Une erreur est survenue lors de la suppression : ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de la suppression de l\'importation'
+            ], 500);
         }
     }
 }

@@ -8,6 +8,16 @@
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">Importation des données du semestre 1</h5>
+                
+                <!-- Ajout de liens rapides vers l'historique -->
+                <div>
+                    <a href="#historique" class="btn btn-sm btn-outline-secondary me-2">
+                        <i class="fas fa-history"></i> Historique des importations
+                    </a>
+                    <a href="{{ route('semestre1.index') }}" class="btn btn-sm btn-outline-primary">
+                        <i class="fas fa-arrow-left"></i> Retour au semestre 1
+                    </a>
+                </div>
             </div>
 
             <div class="card-body">
@@ -55,6 +65,19 @@
                                         <small class="form-text text-muted">Le niveau scolaire auquel seront associées les données importées.</small>
                                     </div>
 
+                                    <!-- Ajout du sélecteur de classe -->
+                                    <div class="mb-3">
+                                        <label for="classroom_id" class="form-label">Classe (optionnel)</label>
+                                        <select id="classroom_id" name="classroom_id" class="form-select @error('classroom_id') is-invalid @enderror">
+                                            <option value="">Toutes les classes</option>
+                                            <!-- Les options de classes seront chargées dynamiquement via JavaScript -->
+                                        </select>
+                                        @error('classroom_id')
+                                            <div class="invalid-feedback">{{ $message }}</div>
+                                        @enderror
+                                        <small class="form-text text-muted">Sélectionnez une classe spécifique ou laissez vide pour importer toutes les classes du niveau.</small>
+                                    </div>
+
                                     <div class="mb-3">
                                         <label for="excel_file" class="form-label">Fichier Excel <span class="text-danger">*</span></label>
                                         <input type="file" id="excel_file" name="excel_file" class="form-control @error('excel_file') is-invalid @enderror" required>
@@ -62,7 +85,7 @@
                                             <div class="invalid-feedback">{{ $message }}</div>
                                         @enderror
                                         <small class="form-text text-muted">
-                                            Le fichier doit contenir les onglets "Moyennes eleves" et "Données détaillées".<br>
+                                            Le fichier doit contenir l'onglet "Moyennes eleves".<br>
                                             Format accepté : .xlsx, .xls (max 10 Mo)
                                         </small>
                                     </div>
@@ -70,11 +93,7 @@
                                     <div class="alert alert-info">
                                         <h6 class="alert-heading">Format du fichier Excel</h6>
                                         <p class="small mb-0">
-                                            Le fichier doit contenir deux onglets :
-                                            <ul class="mb-0">
-                                                <li><strong>Moyennes eleves</strong> : Moyennes générales des élèves</li>
-                                                <li><strong>Données détaillées</strong> : Notes par discipline</li>
-                                            </ul>
+                                            Le fichier doit contenir l'onglet <strong>Moyennes eleves</strong> avec les moyennes générales des élèves.
                                             <button type="button" class="btn btn-link p-0" data-bs-toggle="modal" data-bs-target="#formatModal">
                                                 Voir le format requis en détail
                                             </button>
@@ -100,9 +119,9 @@
                                     <h6 class="fw-bold">Préparation du fichier Excel</h6>
                                     <p>Le fichier d'import doit suivre un format spécifique :</p>
                                     <ol>
-                                        <li>Créer un fichier Excel avec deux onglets nommés <code>Moyennes eleves</code> et <code>Données détaillées</code></li>
-                                        <li>Dans l'onglet <code>Moyennes eleves</code>, préparez les données selon le format demandé</li>
-                                        <li>Dans l'onglet <code>Données détaillées</code>, préparez les notes par matière selon le format demandé</li>
+                                        <li>Créer un fichier Excel avec l'onglet nommé <code>Moyennes eleves</code></li>
+                                        <li>Dans cet onglet, les données commencent à partir de la ligne 12</li>
+                                        <li>Les colonnes doivent respecter l'ordre suivant (A à H) : Matricule, Nom, Prénom, Classe, Moyenne, Rang, Appréciation, Sexe</li>
                                     </ol>
                                 </div>
                                 
@@ -110,6 +129,7 @@
                                     <h6 class="fw-bold">Processus d'importation</h6>
                                     <ol>
                                         <li>Sélectionnez le niveau scolaire concerné</li>
+                                        <li>Sélectionnez éventuellement une classe spécifique</li>
                                         <li>Choisissez votre fichier Excel préparé</li>
                                         <li>Cliquez sur "Importer le fichier"</li>
                                         <li>Le système validera les données et les importera</li>
@@ -125,9 +145,14 @@
                     </div>
                 </div>
 
-                <div class="card">
-                    <div class="card-header">
-                        <h6 class="mb-0">Historique des importations récentes</h6>
+                <div class="card" id="historique">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0">Historique des importations</h6>
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="refreshHistoryBtn">
+                                <i class="fas fa-sync-alt"></i> Actualiser
+                            </button>
+                        </div>
                     </div>
                     <div class="card-body p-0">
                         <div class="table-responsive">
@@ -263,21 +288,9 @@
                     </tbody>
                 </table>
 
-                <hr>
-
-                <h6 class="mt-4">Onglet "Données détaillées"</h6>
-                <p>Cet onglet doit contenir les notes des élèves par discipline.</p>
-                <p>Structure:</p>
-                <ul>
-                    <li>Ligne 7 : Noms des disciplines</li>
-                    <li>Ligne 8 : Sous-colonnes (dont "Moy D" pour la moyenne disciplinaire)</li>
-                    <li>À partir de la ligne 9 : Données des élèves</li>
-                </ul>
-                <p>Les colonnes A, B et C doivent contenir respectivement le matricule, nom et prénom de l'élève.</p>
-                
-                <div class="text-center mt-3">
-                    <img src="{{ asset('images/format_exemple.png') }}" class="img-fluid border" alt="Exemple de format" style="max-width: 100%;">
-                    <p class="text-muted mt-2">Exemple de format de l'onglet "Données détaillées"</p>
+                <div class="text-center mt-4">
+                    <img src="{{ asset('img/Moyennes eleves.PNG') }}" class="img-fluid border" alt="Exemple de format" style="max-width: 100%;">
+                    <p class="text-muted mt-2">Exemple de format de l'onglet "Moyennes eleves"</p>
                 </div>
             </div>
             <div class="modal-footer">
@@ -286,4 +299,117 @@
         </div>
     </div>
 </div>
+
+@push('scripts')
+<script>
+$(document).ready(function() {
+    console.log('Script de chargement des classes initialisé');
+    
+    // Fonction de débogage pour vérifier la disponibilité de jQuery
+    if (typeof $ === 'undefined') {
+        console.error('jQuery n\'est pas chargé!');
+        alert('Une erreur est survenue: jQuery n\'est pas chargé correctement.');
+        return;
+    }
+    
+    // Attendre un court instant pour s'assurer que tous les éléments DOM sont bien initialisés
+    setTimeout(function() {
+        // Déclencher l'événement change si un niveau est déjà sélectionné (pour les rechargements de page)
+        var selectedGradeLevel = $('#grade_level_id').val();
+        console.log('Niveau préalablement sélectionné:', selectedGradeLevel);
+        if (selectedGradeLevel) {
+            console.log('Déclenchement automatique du chargement des classes');
+            loadClassrooms(selectedGradeLevel);
+        }
+    }, 100);
+
+    // Fonction pour charger les classes d'un niveau
+    function loadClassrooms(gradeLevelId) {
+        if (!gradeLevelId) {
+            console.log('Aucun ID de niveau fourni');
+            return;
+        }
+        
+        console.log('Chargement des classes pour le niveau:', gradeLevelId);
+        
+        // Désactiver le sélecteur de classe pendant le chargement
+        var classroomSelect = $('#classroom_id');
+        classroomSelect.prop('disabled', true);
+        classroomSelect.empty().append('<option value="">Chargement en cours...</option>');
+        
+        // URL absolue pour éviter les problèmes de chemins relatifs
+        var apiUrl = window.location.origin + '/api/classrooms/' + gradeLevelId;
+        console.log('Appel API vers:', apiUrl);
+        
+        $.ajax({
+            url: apiUrl,
+            type: 'GET',
+            dataType: 'json',
+            success: function(data) {
+                console.log('Données reçues:', data);
+                
+                classroomSelect.empty();
+                classroomSelect.append('<option value="">Toutes les classes</option>');
+                
+                if (data && data.length > 0) {
+                    $.each(data, function(key, value) {
+                        classroomSelect.append('<option value="' + value.id + '">' + value.name + '</option>');
+                    });
+                    console.log(data.length + ' classes chargées');
+                    
+                    // Notification visuelle du succès
+                    $('<div class="alert alert-success alert-dismissible fade show mt-2" role="alert">')
+                        .text(data.length + ' classes chargées avec succès')
+                        .append('<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>')
+                        .insertAfter(classroomSelect)
+                        .delay(3000)
+                        .fadeOut(function() { $(this).remove(); });
+                        
+                } else {
+                    console.log('Aucune classe trouvée pour ce niveau');
+                    classroomSelect.append('<option value="" disabled>Aucune classe disponible</option>');
+                    
+                    // Notification d'avertissement
+                    $('<div class="alert alert-warning alert-dismissible fade show mt-2" role="alert">')
+                        .text('Aucune classe active n\'est disponible pour ce niveau')
+                        .append('<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>')
+                        .insertAfter(classroomSelect)
+                        .delay(3000)
+                        .fadeOut(function() { $(this).remove(); });
+                }
+                
+                classroomSelect.prop('disabled', false);
+            },
+            error: function(xhr, status, error) {
+                console.error('Erreur lors du chargement des classes:', error);
+                console.error('Statut:', status);
+                console.error('Réponse:', xhr.responseText);
+                
+                classroomSelect.empty();
+                classroomSelect.append('<option value="">Erreur de chargement</option>');
+                classroomSelect.prop('disabled', true);
+                
+                // Afficher une alerte pour informer l'utilisateur
+                $('<div class="alert alert-danger alert-dismissible fade show mt-2" role="alert">')
+                    .text('Erreur lors du chargement des classes: ' + error)
+                    .append('<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>')
+                    .insertAfter(classroomSelect);
+            }
+        });
+    }
+
+    // Charger les classes en fonction du niveau sélectionné
+    $('#grade_level_id').change(function() {
+        var gradeLevelId = $(this).val();
+        console.log('Niveau scolaire sélectionné:', gradeLevelId);
+        loadClassrooms(gradeLevelId);
+    });
+
+    // Actualiser l'historique des importations
+    $('#refreshHistoryBtn').click(function() {
+        location.reload();
+    });
+});
+</script>
+@endpush
 @endsection

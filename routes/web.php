@@ -3,6 +3,7 @@
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\Semestre1Controller;
+use App\Models\Classroom;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -37,12 +38,21 @@ Route::prefix('admin/import')->name('admin.import.')->group(function () {
     Route::delete('/{id}', [ImportController::class, 'destroy'])->name('destroy');
 });
 
+// Routes pour le nouveau système d'importation Excel
+Route::prefix('import')->group(function () {
+    Route::get('/', [ImportController::class, 'index'])->name('import.index');
+    Route::post('/excel', [ImportController::class, 'importExcel'])->name('import.excel');
+    Route::get('/classrooms', [ImportController::class, 'getClassrooms'])->name('import.get-classrooms');
+    Route::get('/details/{id}', [ImportController::class, 'showImportDetails'])->name('import.details');
+    Route::delete('/{id}', [ImportController::class, 'deleteImport'])->name('import.delete');
+});
+
 // Routes pour le Semestre 1
 Route::prefix('semestre1')->group(function () {
     // Page par défaut du semestre 1 - redirige vers l'analyse des moyennes
     Route::get('/', function () {
         return redirect()->route('semestre1.analyse-moyennes');
-    });
+    })->name('semestre1.index');
     
     Route::get('/analyse-moyennes', [Semestre1Controller::class, 'analyseMoyennes'])->name('semestre1.analyse-moyennes');
     Route::get('/analyse-disciplines', [Semestre1Controller::class, 'analyseDisciplines'])->name('semestre1.analyse-disciplines');
@@ -54,4 +64,15 @@ Route::prefix('semestre1')->group(function () {
     Route::delete('/importation/{id}', [Semestre1Controller::class, 'deleteImport'])->name('semestre1.delete-import');
     
     Route::get('/rapport', [Semestre1Controller::class, 'rapport'])->name('semestre1.rapport');
+});
+
+// API Routes
+Route::prefix('api')->group(function() {
+    // API pour récupérer les classes par niveau scolaire
+    Route::get('/classrooms/{gradeId}', function($gradeId) {
+        return Classroom::where('grade_level_id', $gradeId)
+                        ->where('active', true)
+                        ->orderBy('name')
+                        ->get();
+    });
 });

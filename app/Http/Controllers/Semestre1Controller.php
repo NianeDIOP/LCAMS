@@ -58,6 +58,7 @@ class Semestre1Controller extends BaseController
         $validator = Validator::make($request->all(), [
             'excel_file' => 'required|file|mimes:xlsx,xls|max:10240',
             'grade_level_id' => 'required|exists:grade_levels,id',
+            'classroom_id' => 'nullable|exists:classrooms,id',
         ], [
             'excel_file.required' => 'Veuillez sélectionner un fichier Excel à importer.',
             'excel_file.file' => 'Le fichier sélectionné n\'est pas valide.',
@@ -65,6 +66,7 @@ class Semestre1Controller extends BaseController
             'excel_file.max' => 'La taille du fichier ne doit pas dépasser 10 Mo.',
             'grade_level_id.required' => 'Veuillez sélectionner un niveau scolaire.',
             'grade_level_id.exists' => 'Le niveau scolaire sélectionné n\'existe pas.',
+            'classroom_id.exists' => 'La classe sélectionnée n\'existe pas.',
         ]);
 
         if ($validator->fails()) {
@@ -76,16 +78,17 @@ class Semestre1Controller extends BaseController
         // Récupération du fichier uploadé
         $file = $request->file('excel_file');
         
-        // Importation du fichier sans ID utilisateur
+        // Importation du fichier
         $result = $this->importService->importCompleteExcelFile(
             $file->getPathname(),
             $request->grade_level_id,
-            null
+            null, // ID utilisateur (null car pas d'authentification)
+            $request->classroom_id // ID de la classe (optionnel)
         );
 
         if ($result['status'] === 'success') {
-            return redirect()->route('semestre1.importation')
-                ->with('success', 'Le fichier a été importé avec succès.');
+            return redirect()->route('semestre1.show-import', $result['import_id'])
+                ->with('success', 'Le fichier a été importé avec succès. Consultez les détails ci-dessous.');
         } else {
             return redirect()->back()
                 ->with('error', 'Une erreur est survenue lors de l\'importation : ' . $result['message'])
@@ -112,7 +115,21 @@ class Semestre1Controller extends BaseController
         $import = ImportHistory::with('gradeLevel')->findOrFail($id);
         $details = json_decode($import->details);
 
-        return view('semestre1.importation-details', compact('import', 'details'));
+        // Récupérer les étudiants importés pour cet import (basé sur le grade_level_id)
+        $studentsData = null;
+        if ($import->status === 'terminé' && $import->grade_level_id) {
+            // Récupérer les élèves du niveau avec leurs relations
+            $studentsData = \App\Models\Student::with(['classroom', 'semester1Average'])
+                ->whereHas('classroom', function ($query) use ($import) {
+                    $query->where('grade_level_id', $import->grade_level_id);
+                })
+                ->orderBy('classroom_id')
+                ->orderBy('nom')
+                ->orderBy('prenom')
+                ->paginate(50); // Pagination pour ne pas surcharger la page
+        }
+
+        return view('semestre1.importation-details', compact('import', 'details', 'studentsData'));
     }
 
     /**
