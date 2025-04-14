@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -9,12 +10,26 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Student extends Model
 {
+    use HasFactory;
+
     protected $fillable = [
+        'matricule',
         'nom',
         'prenom',
-        'matricule',
         'classroom_id',
         'sexe',
+        'date_naissance',
+        'lieu_naissance',
+        'retards',
+        'absences',
+        'convocations_discipline'
+    ];
+
+    protected $casts = [
+        'date_naissance' => 'date',
+        'retards' => 'integer',
+        'absences' => 'integer',
+        'convocations_discipline' => 'integer',
     ];
 
     /**

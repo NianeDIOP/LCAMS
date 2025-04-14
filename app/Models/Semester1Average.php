@@ -11,7 +11,14 @@ class Semester1Average extends Model
         'student_id',
         'moyenne',
         'rang',
+        'decision',
         'appreciation',
+        'observations'
+    ];
+
+    protected $casts = [
+        'moyenne' => 'float',
+        'rang' => 'integer',
     ];
 
     /**
