@@ -546,17 +546,19 @@
 
             // Vérifier si on a un ID de fichier dans la réponse de prévisualisation
             if (selectedFileData && selectedFileData.file_id) {
-                // On a déjà prévisualisé le fichier, utiliser directement son ID pour continuer
+                // Si on a déjà un ID de fichier, on peut rediriger directement
                 redirectToVisualization(selectedFileData.file_id);
+            } else if (selectedFileData && selectedFileData.session_id) {
+                // Si on a un ID de session, on peut aussi rediriger avec cet ID
+                redirectToVisualization(selectedFileData.session_id);
             } else {
-                // Pas d'ID disponible, il faut envoyer le fichier au serveur pour obtenir un ID
+                // Sinon, on doit d'abord uploader le fichier pour obtenir un ID
                 const formData = new FormData();
                 formData.append('file', uploadedFile.file);
                 formData.append('classroom_id', classroomId);
                 formData.append('_token', csrfToken);
                 
-                // Envoyer la requête d'importation pour obtenir un ID de fichier
-                fetch('{{ route('semestre1.importation.importFromSession') }}', {
+                fetch('{{ route('semestre1.importation.import') }}', {
                     method: 'POST',
                     body: formData
                 })
@@ -568,11 +570,10 @@
                 })
                 .then(data => {
                     if (data.success && data.file_id) {
-                        // Rediriger vers la visualisation avec l'ID du fichier
+                        // Rediriger vers la page de visualisation avec l'ID du fichier
                         redirectToVisualization(data.file_id);
                     } else {
-                        // Afficher l'erreur
-                        throw new Error(data.message || 'Erreur lors de l\'importation du fichier');
+                        throw new Error(data.message || 'Erreur lors du traitement du fichier.');
                     }
                 })
                 .catch(error => {
@@ -582,24 +583,20 @@
                         error.json().then(errorData => {
                             loadingSection.classList.add('d-none');
                             importSection.classList.remove('d-none');
-                            showError(errorData.message || 'Une erreur s\'est produite lors de l\'importation.');
+                            showError(errorData.message || 'Une erreur s\'est produite lors du traitement du fichier.');
                         });
                     } else {
                         loadingSection.classList.add('d-none');
                         importSection.classList.remove('d-none');
-                        showError(error.message || 'Une erreur s\'est produite lors de l\'importation.');
+                        showError('Une erreur s\'est produite lors du traitement du fichier.');
                     }
                 });
             }
         }
 
-        // Fonction de redirection vers la page de visualisation
+        // Fonction pour rediriger vers la page de visualisation
         function redirectToVisualization(fileId) {
-            // Construire l'URL de la page de visualisation avec l'ID du fichier et l'ID de la classe
-            const visualizationUrl = `{{ route('semestre1.importation.visualize') }}?file_id=${fileId}&classroom_id=${classroomId}`;
-            
-            // Rediriger vers la page de visualisation
-            window.location.href = visualizationUrl;
+            window.location.href = '{{ route('semestre1.importation.visualize') }}?file_id=' + fileId + '&classroom_id=' + classroomId;
         }
     });
 </script>

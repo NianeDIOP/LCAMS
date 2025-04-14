@@ -57,6 +57,27 @@ class Semestre1Controller extends BaseController
     }
     
     /**
+     * Traite la redirection après prévisualisation pour afficher la page de visualisation des données
+     * Cette méthode reçoit l'ID du fichier et l'ID de la classe depuis la redirection
+     */
+    public function visualizeExcelData(Request $request)
+    {
+        $fileId = $request->query('file_id');
+        $classroomId = $request->query('classroom_id');
+        
+        if (!$fileId || !$classroomId) {
+            return redirect()->route('semestre1.importation')
+                ->with('error', 'Données manquantes pour la visualisation. Veuillez recommencer l\'importation.');
+        }
+        
+        // Stocker ces informations dans la session pour les récupérer dans la vue de visualisation
+        session(['excel_file_id' => $fileId, 'classroom_id' => $classroomId]);
+        
+        // Rediriger vers la vue de visualisation
+        return $this->visualisationDonnees();
+    }
+    
+    /**
      * Affiche la page de visualisation des données importées (étape 3)
      */
     public function visualisationDonnees()

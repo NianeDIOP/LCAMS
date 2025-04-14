@@ -45,8 +45,8 @@ Route::prefix('semestre1')->group(function () {
     Route::get('/importation', [Semestre1Controller::class, 'importation'])->name('semestre1.importation');
     Route::get('/importation/excel', [Semestre1Controller::class, 'importExcel'])->name('semestre1.importation.excel');
     Route::get('/importation/visualisation', [Semestre1Controller::class, 'visualisationDonnees'])->name('semestre1.importation.visualisation');
-    // Alias route for compatibility with JS code
-    Route::get('/importation/visualize', [Semestre1Controller::class, 'visualisationDonnees'])->name('semestre1.importation.visualize');
+    // Route pour traiter la redirection avec les paramètres file_id et classroom_id
+    Route::get('/importation/visualize', [Semestre1Controller::class, 'visualizeExcelData'])->name('semestre1.importation.visualize');
     Route::get('/importation/validation', [Semestre1Controller::class, 'validationDonnees'])->name('semestre1.importation.validation');
     
     // Routes API pour l'importation des fichiers Excel
